@@ -1,0 +1,16 @@
+# dependencies and build output
+node_modules/
+dist/
+report/.venv/
+
+# generated reports and collected data (never commit lead-related output)
+report/out/
+collector/out/
+
+# secrets and local config (keys live in env / GitHub Secrets, never here)
+.env
+*.key
+**/roblosecurity
+
+# OS noise
+.DS_Store

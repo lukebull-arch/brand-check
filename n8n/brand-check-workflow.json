@@ -1,0 +1,228 @@
+{
+  "name": "Brand check \u2014 lead intake",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "brand-check",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1376,
+        -448
+      ],
+      "webhookId": "brand-check",
+      "id": "f5f02f5c-7879-4c54-9896-150ce201d922"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === Validate brand check submission ===\n// The client holds no secret, so trust is earned here instead:\n//   1. honeypot must be empty (bots fill it)\n//   2. submission must not be implausibly fast\n//   3. browser Origin (when present) must be one of ours\n//   4. all fields present, email is a business domain\n//   5. global rate limit, plus a repeat flag for the Slack alert\n// Blocked submissions still get a 200 OK so bots learn nothing.\n// ENFORCE = true blocks. While false, nothing is blocked (tags only).\n\nconst ENFORCE = true;\nconst MIN_ELAPSED_MS = 8000; // discovery theatre alone takes ~4.2s\nconst MAX_PER_HOUR = 30;\n\nconst ALLOWED_ORIGINS = new Set([\n  'https://www.geeiq.com',\n  'https://geeiq.com',\n  'https://check.geeiq.com',\n  'http://localhost:5173',\n  'http://localhost:4173',\n]);\n\n// Same list as the Framer Demo Form workflow (free, personal, disposable):\nconst BLOCKED_EMAIL_DOMAINS = new Set([\n  'gmail.com','googlemail.com','yahoo.com','yahoo.co.uk','ymail.com','rocketmail.com',\n  'hotmail.com','hotmail.co.uk','outlook.com','live.com','live.co.uk','msn.com',\n  'icloud.com','me.com','mac.com','aol.com','gmx.com','gmx.net','gmx.co.uk','mail.com',\n  'proton.me','protonmail.com','pm.me','yandex.com','yandex.ru','zoho.com',\n  'hey.com','fastmail.com','tutanota.com','qq.com','163.com','126.com',\n  'mailinator.com','guerrillamail.com','10minutemail.com','tempmail.com','temp-mail.org',\n  'dosbee.com','trashmail.com','getnada.com','yopmail.com','sharklasers.com','throwawaymail.com'\n]);\n\nconst EMAIL_RE = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n\nconst item = $input.first();\nconst headers = item.json.headers || {};\nconst body = item.json.body || {};\nconst s = (v) => (v || '').toString().trim();\n\nconst brand = s(body.brand).slice(0, 120);\nconst firstName = s(body.firstName).slice(0, 80);\nconst lastName = s(body.lastName).slice(0, 80);\nconst jobTitle = s(body.jobTitle).slice(0, 120);\nconst email = s(body.email).toLowerCase();\nconst domain = email.includes('@') ? email.split('@').pop() : '';\n\nlet blockReason = null;\nif (s(body.hp)) blockReason = 'honeypot_filled';\nelse if (typeof body.elapsedMs === 'number' && body.elapsedMs < MIN_ELAPSED_MS) blockReason = 'submitted_too_fast';\nelse if (headers.origin && !ALLOWED_ORIGINS.has(headers.origin)) blockReason = 'unknown_origin';\nelse if (!brand || !firstName || !lastName || !jobTitle) blockReason = 'missing_fields';\nelse if (!EMAIL_RE.test(email)) blockReason = 'bad_email_format';\nelse if (!domain || BLOCKED_EMAIL_DOMAINS.has(domain)) blockReason = 'non_business_email';\n\n// Rate limit and repeat flag. Static data persists between production\n// executions only, so test runs in the editor are never rate limited.\nconst sd = $getWorkflowStaticData('global');\nconst now = Date.now();\nsd.recent = (sd.recent || []).filter((t) => now - t < 3600000);\nif (!blockReason && sd.recent.length >= MAX_PER_HOUR) blockReason = 'rate_limited';\nif (!blockReason) sd.recent.push(now);\nsd.byEmail = sd.byEmail || {};\nfor (const k of Object.keys(sd.byEmail)) {\n  if (now - sd.byEmail[k] > 86400000) delete sd.byEmail[k];\n}\nconst repeat = !!sd.byEmail[email];\nif (!blockReason) sd.byEmail[email] = now;\n\nreturn [{\n  json: {\n    _passed: ENFORCE ? blockReason === null : true,\n    _blockReason: blockReason,\n    brand,\n    firstName,\n    lastName,\n    jobTitle,\n    email,\n    pageUrl: s(body.pageUrl).slice(0, 300),\n    elapsedMs: typeof body.elapsedMs === 'number' ? body.elapsedMs : null,\n    submittedAt: s(body.submittedAt),\n    repeat,\n  },\n}];"
+      },
+      "name": "Validate submission",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1136,
+        -448
+      ],
+      "id": "5341b511-246c-4b01-93ff-fec9dc164f41"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "513fcaa7-d7c2-4445-a4bd-376000d1bf36",
+              "leftValue": "={{ $json._passed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Passed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -912,
+        -448
+      ],
+      "id": "47de3674-072b-4438-9ea8-a88aaa361408"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_WITH_HUBSPOT_PRIVATE_APP_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"inputs\": [\n    {\n      \"idProperty\": \"email\",\n      \"id\": \"{{ $('Validate submission').first().json.email }}\",\n      \"properties\": {\n        \"firstname\": \"{{ $('Validate submission').first().json.firstName }}\",\n        \"lastname\": \"{{ $('Validate submission').first().json.lastName }}\",\n        \"email\": \"{{ $('Validate submission').first().json.email }}\",\n        \"jobtitle\": \"{{ $('Validate submission').first().json.jobTitle }}\",\n        \"hs_lead_status\": \"NEW\",\n        \"hs_legal_basis\": \"Freely given consent from contact\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "name": "Upsert HubSpot Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -688,
+        -544
+      ],
+      "id": "b64ad19a-6ccc-402d-85b3-c4218d599f64"
+    },
+    {
+      "parameters": {
+        "jsCode": "const v = $('Validate submission').first().json;\nconst res = $input.first().json;\nconst contactId = res.results && res.results[0] ? String(res.results[0].id) : '';\nconst hubspotUrl = contactId\n  ? `https://app.hubspot.com/contacts/5878363/record/0-1/${contactId}`\n  : 'https://app.hubspot.com/contacts/5878363';\nreturn [{ json: { ...v, contactId, hubspotUrl } }];"
+      },
+      "name": "Prepare alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        -544
+      ],
+      "id": "004ea6fd-b636-4cf7-b05d-d9643b6828b6"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"#brand-check-leads\",\n  \"text\": \"New brand check request: {{ $json.brand }}\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": { \"type\": \"plain_text\", \"text\": \"Brand check \u2014 {{ $json.brand }}\" }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        { \"type\": \"mrkdwn\", \"text\": \"*Name*\\n{{ $json.firstName }} {{ $json.lastName }}\" },\n        { \"type\": \"mrkdwn\", \"text\": \"*Role*\\n{{ $json.jobTitle }}\" },\n        { \"type\": \"mrkdwn\", \"text\": \"*Email*\\n{{ $json.email }}\" },\n        { \"type\": \"mrkdwn\", \"text\": \"*Repeat request*\\n{{ $json.repeat ? 'Yes' : 'No' }}\" }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": { \"type\": \"mrkdwn\", \"text\": \"Report due within 2 working days. Submitted from {{ $json.pageUrl }}\" }\n    },\n    {\n      \"type\": \"actions\",\n      \"elements\": [\n        {\n          \"type\": \"button\",\n          \"text\": { \"type\": \"plain_text\", \"text\": \"View in HubSpot\" },\n          \"url\": \"{{ $json.hubspotUrl }}\",\n          \"action_id\": \"view_hubspot\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "name": "Notify team in Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        -544
+      ],
+      "id": "407dd782-cff1-492b-a95a-b799fbfcc085"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        -448
+      ],
+      "id": "ae0cde4b-1d15-448c-ad4f-bdc0cba23adc"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate submission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate submission": {
+      "main": [
+        [
+          {
+            "node": "Passed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Passed?": {
+      "main": [
+        [
+          {
+            "node": "Upsert HubSpot Contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert HubSpot Contact": {
+      "main": [
+        [
+          {
+            "node": "Prepare alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare alert": {
+      "main": [
+        [
+          {
+            "node": "Notify team in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify team in Slack": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

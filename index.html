@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Check your brand's presence in virtual worlds | GEEIQ</title>
+    <meta
+      name="description"
+      content="Virtual worlds are creator-led. Your brand may already appear in Roblox and Fortnite through fan-made content. Get a free report on your brand's footprint, built by a GEEIQ analyst."
+    />
+
+    <meta property="og:title" content="Check your brand's presence in virtual worlds | GEEIQ" />
+    <meta
+      property="og:description"
+      content="Virtual worlds are creator-led. Your brand may already appear in Roblox and Fortnite through fan-made content. Get a free report on your brand's footprint, built by a GEEIQ analyst."
+    />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:type" content="website" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- Nav -->
+    <header class="nav">
+      <div class="container nav__inner">
+        <a class="nav__logo" href="https://www.geeiq.com" aria-label="GEEIQ home">
+          <img src="/geeiq-logo.svg" alt="GEEIQ" width="110" height="22" />
+        </a>
+        <a class="nav__link" href="https://www.geeiq.com">Book a demo</a>
+      </div>
+    </header>
+
+    <main>
+      <!-- Hero region: swaps between four states -->
+      <section class="hero">
+        <div class="container hero__inner">
+          <!-- State 1: input -->
+          <div class="state state--active" data-state="1">
+            <div class="hero-stage">
+              <span class="deco deco--ring deco--ring-1" aria-hidden="true"></span>
+              <span class="deco deco--ring deco--ring-2" aria-hidden="true"></span>
+              <span class="deco deco--dot deco--dot-coral" aria-hidden="true"></span>
+              <span class="deco deco--dot deco--dot-purple" aria-hidden="true"></span>
+              <span class="deco deco--dot deco--dot-amber" aria-hidden="true"></span>
+
+              <div class="hero-figure" aria-hidden="true">
+                <span class="hero-figure__disc"></span>
+                <img class="hero-figure__avatar" src="/geeiq-avatar.png" alt="" />
+              </div>
+
+              <div class="hero-card">
+                <h1 class="hero__headline">Check your brand's presence in virtual worlds</h1>
+                <p class="hero__subhead">
+                  Find out where your brand already appears across Roblox, Fortnite and beyond,
+                  whether you've activated or not.
+                </p>
+                <form class="brand-form" id="brand-form" novalidate>
+                  <div class="input-group">
+                    <input
+                      type="text"
+                      id="brand-input"
+                      class="input"
+                      placeholder="Enter your brand name"
+                      autocomplete="organization"
+                      aria-label="Brand name"
+                    />
+                    <button type="submit" class="btn btn--primary">Check presence</button>
+                  </div>
+                  <p class="field-error" id="brand-error" role="alert" hidden></p>
+                </form>
+                <p class="trust-line">
+                  Free · built by a GEEIQ analyst · delivered within 2 working days
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- State 2: discovering -->
+          <div class="state" data-state="2" hidden>
+            <h2 class="state__heading">
+              Discovering brand visibility for <span class="brand-name" data-brand></span>
+            </h2>
+            <div class="avatar avatar--lg" aria-hidden="true">
+              <img class="avatar__base" src="/geeiq-avatar.png" alt="" />
+              <!-- Erases the photo ball's baked-in motion streaks; hides under the SVG ball -->
+              <span class="avatar__cover"></span>
+              <span class="spinball">
+                <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <radialGradient id="bball" cx="38%" cy="30%" r="80%">
+                      <stop offset="0%" stop-color="#F6A860" />
+                      <stop offset="46%" stop-color="#E87B2C" />
+                      <stop offset="100%" stop-color="#A94C17" />
+                    </radialGradient>
+                    <radialGradient id="bshine" cx="34%" cy="26%" r="44%">
+                      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55" />
+                      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+                    </radialGradient>
+                    <!-- Ambient occlusion where the ball meets the fingertip -->
+                    <radialGradient id="bao" cx="50%" cy="102%" r="55%">
+                      <stop offset="0%" stop-color="#331304" stop-opacity="0.5" />
+                      <stop offset="100%" stop-color="#331304" stop-opacity="0" />
+                    </radialGradient>
+                    <!-- Streak trail: pale where it smears across the ball face,
+                         warmer orange where it runs out over the background -->
+                    <linearGradient
+                      id="streakgrad"
+                      gradientUnits="userSpaceOnUse"
+                      x1="-6"
+                      y1="20"
+                      x2="126"
+                      y2="20"
+                    >
+                      <stop offset="0" stop-color="#E8862F" />
+                      <stop offset="0.45" stop-color="#FFDDB0" />
+                      <stop offset="0.55" stop-color="#FFDDB0" />
+                      <stop offset="1" stop-color="#E8862F" />
+                    </linearGradient>
+                    <!-- Pebble grain: noise rendered as dark speckle -->
+                    <filter id="bgrain">
+                      <feTurbulence
+                        type="fractalNoise"
+                        baseFrequency="0.9"
+                        numOctaves="2"
+                        seed="7"
+                      />
+                      <feColorMatrix
+                        type="matrix"
+                        values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.9 0.9 0.9 0 0"
+                      />
+                    </filter>
+                    <clipPath id="bclip"><circle cx="60" cy="60" r="57" /></clipPath>
+                  </defs>
+                  <g clip-path="url(#bclip)">
+                    <rect x="0" y="0" width="120" height="120" fill="url(#bball)" />
+                    <rect
+                      x="0"
+                      y="0"
+                      width="120"
+                      height="120"
+                      filter="url(#bgrain)"
+                      opacity="0.08"
+                    />
+                    <!-- Longitude seams; paths are generated and animated in main.js -->
+                    <g
+                      id="spinball-mer"
+                      fill="none"
+                      stroke="#2a1206"
+                      stroke-width="2.6"
+                      stroke-linecap="round"
+                    ></g>
+                    <!-- Equator: perpendicular to the spin axis, so it stays put -->
+                    <path
+                      d="M 4 60 Q 60 62.5 116 60"
+                      fill="none"
+                      stroke="#2a1206"
+                      stroke-width="2.6"
+                      stroke-linecap="round"
+                    />
+                    <circle cx="60" cy="60" r="57" fill="url(#bshine)" />
+                    <circle cx="60" cy="60" r="57" fill="url(#bao)" />
+                  </g>
+                  <!-- Motion streaks, echoing the baked-in blur on the page 1 photo:
+                       they sweep across the ball face and run out past both edges -->
+                  <g class="spinball__streaks" fill="none" stroke-linecap="round">
+                    <path
+                      d="M -6 44 Q 60 8 126 40"
+                      stroke="url(#streakgrad)"
+                      stroke-width="4"
+                      opacity="0.5"
+                    />
+                    <path
+                      d="M 2 26 Q 60 -6 118 22"
+                      stroke="url(#streakgrad)"
+                      stroke-width="2.5"
+                      opacity="0.3"
+                    />
+                    <path
+                      d="M 115.4 28 A 64 64 0 0 1 123.8 65.6"
+                      stroke="#E8862F"
+                      stroke-width="3"
+                      opacity="0.32"
+                    />
+                  </g>
+                </svg>
+              </span>
+            </div>
+            <div class="progress" aria-hidden="true">
+              <div class="progress__bar" id="progress-bar"></div>
+            </div>
+            <ul class="steps" id="discovery-steps">
+              <li class="step" data-step>
+                <span class="step__icon"></span>
+                <span class="step__label">Scanning official activations</span>
+              </li>
+              <li class="step" data-step>
+                <span class="step__icon"></span>
+                <span class="step__label">Scanning creator-made content</span>
+              </li>
+              <li class="step" data-step>
+                <span class="step__icon"></span>
+                <span class="step__label">Checking branded items</span>
+              </li>
+              <li class="step" data-step>
+                <span class="step__icon"></span>
+                <span class="step__label">Reviewing category activity</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- State 3: email gate -->
+          <div class="state" data-state="3" hidden>
+            <h2 class="state__heading">
+              We found activity for <span class="brand-name" data-brand></span>
+            </h2>
+            <p class="state__body">
+              Enter your work email and a GEEIQ analyst will build your report. It lands in your
+              inbox within 2 working days.
+            </p>
+            <form class="email-form" id="email-form" novalidate>
+              <div class="form-fields">
+                <div class="form-row">
+                  <input
+                    type="text"
+                    id="first-name-input"
+                    class="field-input"
+                    placeholder="First name"
+                    autocomplete="given-name"
+                    aria-label="First name"
+                  />
+                  <input
+                    type="text"
+                    id="last-name-input"
+                    class="field-input"
+                    placeholder="Last name"
+                    autocomplete="family-name"
+                    aria-label="Last name"
+                  />
+                </div>
+                <input
+                  type="text"
+                  id="job-title-input"
+                  class="field-input"
+                  placeholder="Job title"
+                  autocomplete="organization-title"
+                  aria-label="Job title"
+                />
+                <input
+                  type="email"
+                  id="email-input"
+                  class="field-input"
+                  placeholder="Work email"
+                  autocomplete="email"
+                  aria-label="Work email"
+                />
+                <button type="submit" class="btn btn--primary btn--full" id="email-submit">
+                  Request my report
+                </button>
+              </div>
+              <!-- Honeypot: hidden from humans, bots fill it. Sent as hp. -->
+              <div class="hp-field" aria-hidden="true">
+                <label for="company_website">Company website</label>
+                <input
+                  type="text"
+                  id="company_website"
+                  name="company_website"
+                  tabindex="-1"
+                  autocomplete="off"
+                />
+              </div>
+              <p class="field-error" id="email-error" role="alert" hidden></p>
+            </form>
+            <p class="small-print">
+              Work emails only. We'll use your email to send your report and occasional GEEIQ
+              research. Unsubscribe any time.
+            </p>
+          </div>
+
+          <!-- State 4: confirmation -->
+          <div class="state" data-state="4" hidden>
+            <h2 class="state__heading">Your report is on its way</h2>
+            <p class="state__body">
+              A GEEIQ analyst is pulling the data on <span class="brand-name" data-brand></span>
+              now. Expect your report within 2 working days.
+            </p>
+            <p class="state__body">
+              In the meantime, our Brands in Gaming 101 report covers how virtual worlds work and
+              why brands are paying attention.
+            </p>
+            <a class="btn btn--primary" href="https://www.geeiq.com">Read Brands in Gaming 101</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Explainer -->
+      <section class="explainer">
+        <div class="container explainer__inner">
+          <h2 class="section-heading">Your brand may already be there</h2>
+          <p>
+            Virtual worlds are creator-led economies. Players build experiences, items and
+            communities around the brands they love, with or without permission. That means your
+            brand can have a footprint in Roblox or Fortnite long before you've ever run an
+            activation.
+          </p>
+          <p>
+            Fan-made experiences. User-generated items. Unofficial tributes and knock-offs. This
+            activity shapes how millions of players encounter your brand every day, and most brands
+            have never seen it.
+          </p>
+          <p class="explainer__closing">
+            We track it. Enter your brand above and we'll show you what's out there.
+          </p>
+        </div>
+      </section>
+
+      <!-- Proof strip: scrolling brand belt -->
+      <section class="proof">
+        <div class="container">
+          <p class="proof__label">Brands already showing up in virtual worlds</p>
+        </div>
+        <div class="belt" aria-label="Brands tracked by GEEIQ">
+          <!-- Two identical tracks side by side make a seamless loop -->
+          <ul class="belt__track" aria-hidden="false">
+            <li><img src="/logos/logo-netflix.svg" alt="Netflix" /></li>
+            <li><img src="/logos/logo-disney.svg" alt="Disney" /></li>
+            <li><img src="/logos/logo-bbc.svg" alt="BBC" /></li>
+            <li><img src="/logos/logo-paramount.svg" alt="Paramount" /></li>
+            <li><img src="/logos/logo-universal.svg" alt="Universal" /></li>
+            <li><img src="/logos/logo-nickelodeon.svg" alt="Nickelodeon" /></li>
+            <li><img src="/logos/logo-cartoon-network.svg" alt="Cartoon Network" /></li>
+            <li><img src="/logos/logo-lionsgate.svg" alt="Lionsgate" /></li>
+            <li><img src="/logos/logo-dreamworks.svg" alt="DreamWorks" /></li>
+          </ul>
+          <ul class="belt__track" aria-hidden="true">
+            <li><img src="/logos/logo-netflix.svg" alt="" /></li>
+            <li><img src="/logos/logo-disney.svg" alt="" /></li>
+            <li><img src="/logos/logo-bbc.svg" alt="" /></li>
+            <li><img src="/logos/logo-paramount.svg" alt="" /></li>
+            <li><img src="/logos/logo-universal.svg" alt="" /></li>
+            <li><img src="/logos/logo-nickelodeon.svg" alt="" /></li>
+            <li><img src="/logos/logo-cartoon-network.svg" alt="" /></li>
+            <li><img src="/logos/logo-lionsgate.svg" alt="" /></li>
+            <li><img src="/logos/logo-dreamworks.svg" alt="" /></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Stats band -->
+      <section class="stats">
+        <div class="container stats__grid">
+          <div class="stat">
+            <span class="stat__num">8 years</span>
+            <span class="stat__label">tracking virtual worlds</span>
+          </div>
+          <div class="stat">
+            <span class="stat__num">[X]</span>
+            <span class="stat__label">brands tracked</span>
+          </div>
+          <div class="stat">
+            <span class="stat__num">[X]</span>
+            <span class="stat__label">activations logged</span>
+          </div>
+          <div class="stat">
+            <span class="stat__num">[X]</span>
+            <span class="stat__label">platforms covered</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- What you'll get -->
+      <section class="get">
+        <div class="container get__grid">
+          <div class="get__copy">
+            <h2 class="section-heading">What you'll get</h2>
+            <p class="get__intro">
+              A short, bespoke report on your brand's footprint in virtual worlds, built by a GEEIQ
+              analyst from our platform data. Inside:
+            </p>
+            <ul class="get__bullets">
+              <li>
+                Where your brand appears today, including official activity and creator-made
+                content
+              </li>
+              <li>A handful of stats specific to your brand, pulled fresh from 8 years of tracking</li>
+              <li>How your category is showing up across Roblox, Fortnite and other platforms</li>
+              <li>A short guide to how brands enter virtual worlds, and where most get it wrong</li>
+            </ul>
+            <p class="get__caption">Built by a GEEIQ analyst, not a bot</p>
+          </div>
+          <div class="get__mock" aria-hidden="true">
+            <div class="mock">
+              <div class="mock__bar"></div>
+              <div class="mock__line"></div>
+              <div class="mock__line"></div>
+              <div class="mock__line mock__line--short"></div>
+              <div class="mock__stats">
+                <div class="mock__stat"></div>
+                <div class="mock__stat"></div>
+              </div>
+              <div class="mock__line"></div>
+              <div class="mock__line mock__line--short"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- How it works -->
+      <section class="how">
+        <div class="container">
+          <h2 class="section-heading how__heading">How it works</h2>
+          <ol class="how__steps">
+            <li class="how__step">
+              <span class="how__num">1</span>
+              <h3 class="how__title">Tell us your brand.</h3>
+              <p class="how__body">Takes ten seconds.</p>
+            </li>
+            <li class="how__step">
+              <span class="how__num">2</span>
+              <h3 class="how__title">We pull the data.</h3>
+              <p class="how__body">
+                A GEEIQ analyst checks your brand's footprint across the platforms we track.
+              </p>
+            </li>
+            <li class="how__step">
+              <span class="how__num">3</span>
+              <h3 class="how__title">Your report lands in your inbox.</h3>
+              <p class="how__body">Within 2 working days, free.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Footer CTA -->
+      <section class="footer-cta">
+        <div class="container footer-cta__inner">
+          <h2 class="section-heading">See the full picture</h2>
+          <p class="footer-cta__body">
+            The report is a snapshot. The GEEIQ platform tracks brand activity across virtual worlds
+            every day, for teams who need more than a one-off check.
+          </p>
+          <a class="btn btn--primary" href="https://www.geeiq.com">Book a demo</a>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
