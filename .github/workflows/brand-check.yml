@@ -48,6 +48,15 @@ jobs:
             echo "hubspot_url=" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check Slack configuration
+        run: |
+          if [ -n "${{ secrets.SLACK_BOT_TOKEN }}" ] && [ -n "${{ secrets.SLACK_CHANNEL_ID }}" ]; then
+            echo "SLACK_READY=true" >> "$GITHUB_ENV"
+          else
+            echo "SLACK_READY=false" >> "$GITHUB_ENV"
+            echo "::notice::Slack secrets not set yet - report will build but not post. Download it from the run artifacts."
+          fi
+
       - name: Collect data and build report
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -57,6 +66,7 @@ jobs:
           python3 run.py --brand "${{ steps.inputs.outputs.brand }}"
 
       - name: Post draft to Slack for approval
+        if: ${{ env.SLACK_READY == 'true' }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
