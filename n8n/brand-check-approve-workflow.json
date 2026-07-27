@@ -1,0 +1,342 @@
+{
+  "name": "Brand check \u2014 approve handler",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "brand-check-approve",
+        "options": {}
+      },
+      "name": "Slack action",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1400,
+        -300
+      ],
+      "webhookId": "brand-check-approve",
+      "id": "0bd8d053-25c3-4f17-9504-cbf358d5b294"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Slack interactivity sends a form-encoded `payload` field of JSON.\nconst body = $input.first().json.body || {};\nconst payload = JSON.parse(body.payload);\nconst action = (payload.actions && payload.actions[0]) || {};\nconst meta = JSON.parse(action.value || '{}');\n\n// Recover the email draft from the original message blocks\nlet draft = '';\nfor (const b of (payload.message && payload.message.blocks) || []) {\n  const t = (b.text && b.text.text) || '';\n  if (t.includes('Email that will be sent')) {\n    const m = t.match(/```([\\s\\S]*?)```/);\n    if (m) draft = m[1].trim();\n  }\n}\nconst ANALYST_NAME = 'Luke';\ndraft = draft\n  .replace(/\\[first name\\]/g, meta.firstName || 'there')\n  .replace(/\\[analyst name\\]/g, ANALYST_NAME);\n\nlet subject = 'Your GEEIQ brand check: ' + (meta.brand || '');\nconst sm = draft.match(/^Subject:\\s*(.+)\\s*\\n+/);\nlet bodyText = draft;\nif (sm) { subject = sm[1].trim(); bodyText = draft.slice(sm[0].length).trim(); }\n\nreturn [{ json: {\n  actionId: action.action_id || '',\n  brand: meta.brand || '',\n  email: meta.email || '',\n  firstName: meta.firstName || 'there',\n  fileId: meta.fileId || '',\n  approver: (payload.user && (payload.user.name || payload.user.username)) || 'someone',\n  responseUrl: payload.response_url || '',\n  subject: subject,\n  bodyText: bodyText,\n}}];"
+      },
+      "name": "Parse action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1180,
+        -300
+      ],
+      "id": "222edd07-8d6c-4afd-8ff3-9111c6974fdb"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cd2ac218-cd35-41af-b0f5-80279d667523",
+              "leftValue": "={{ $json.actionId }}",
+              "rightValue": "brand_check_approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Approve?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        -300
+      ],
+      "id": "e3bfc705-facf-447a-a70c-20c183a337bc"
+    },
+    {
+      "parameters": {
+        "url": "=https://slack.com/api/files.info?file={{ $json.fileId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "options": {}
+      },
+      "name": "Get PDF link",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -740,
+        -420
+      ],
+      "id": "dcc13085-d19d-49a6-93f3-dd826ed4d5f3"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.file.url_private_download }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "name": "Download PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -520,
+        -420
+      ],
+      "id": "23bf23f1-ebbf-47a5-8ef0-5932f271dfed"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Parse action').first().json.email }}",
+        "subject": "={{ $('Parse action').first().json.subject }}",
+        "emailType": "text",
+        "message": "={{ $('Parse action').first().json.bodyText }}",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "data"
+              }
+            ]
+          }
+        }
+      },
+      "name": "Send report email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -300,
+        -420
+      ],
+      "id": "83816ede-2325-4a48-9d98-cd4a7de0d5e8"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Parse action').first().json.responseUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({replace_original: true, text: ':white_check_mark: ' + $('Parse action').first().json.brand + ' report approved by ' + $('Parse action').first().json.approver + ' and sent to ' + $('Parse action').first().json.email}) }}",
+        "options": {}
+      },
+      "name": "Confirm sent in Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -80,
+        -420
+      ],
+      "id": "732fedfe-5dae-456a-8be3-49183d1776e2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7ed8a285-de79-4e91-bdb2-94b76af6c0cd",
+              "leftValue": "={{ $json.actionId }}",
+              "rightValue": "brand_check_decline",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Decline?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -740,
+        -180
+      ],
+      "id": "a62eb9d6-ad65-4779-be96-c771c9bcfceb"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Parse action').first().json.email }}",
+        "subject": "Your GEEIQ brand check request",
+        "emailType": "text",
+        "message": "=Hi {{ $('Parse action').first().json.firstName }},\n\nThanks for requesting a brand check on {{ $('Parse action').first().json.brand }}. We build these reports for people who work at or with the brand being checked, and we could not connect your email address to {{ $('Parse action').first().json.brand }}.\n\nIf you do work with {{ $('Parse action').first().json.brand }}, reply from your work email address and we will pick it up from there.\n\nThe GEEIQ team",
+        "options": {}
+      },
+      "name": "Send decline email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -520,
+        -260
+      ],
+      "id": "17ce4343-8563-4d88-a805-538531ce52f3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Parse action').first().json.responseUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({replace_original: true, text: ':no_entry: ' + $('Parse action').first().json.brand + ' declined by ' + $('Parse action').first().json.approver + '. Decline email sent to ' + $('Parse action').first().json.email}) }}",
+        "options": {}
+      },
+      "name": "Confirm declined in Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -300,
+        -260
+      ],
+      "id": "c214a07d-6a51-4648-834f-321400acbcd7"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Parse action').first().json.responseUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({replace_original: true, text: ':wastebasket: ' + $('Parse action').first().json.brand + ' request discarded by ' + $('Parse action').first().json.approver + '. No email sent.'}) }}",
+        "options": {}
+      },
+      "name": "Confirm discarded in Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -520,
+        -100
+      ],
+      "id": "afc9e141-c12d-4e8c-bb0e-5638cbadf4bb"
+    }
+  ],
+  "connections": {
+    "Slack action": {
+      "main": [
+        [
+          {
+            "node": "Parse action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse action": {
+      "main": [
+        [
+          {
+            "node": "Approve?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve?": {
+      "main": [
+        [
+          {
+            "node": "Get PDF link",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Decline?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get PDF link": {
+      "main": [
+        [
+          {
+            "node": "Download PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download PDF": {
+      "main": [
+        [
+          {
+            "node": "Send report email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send report email": {
+      "main": [
+        [
+          {
+            "node": "Confirm sent in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decline?": {
+      "main": [
+        [
+          {
+            "node": "Send decline email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Confirm discarded in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send decline email": {
+      "main": [
+        [
+          {
+            "node": "Confirm declined in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

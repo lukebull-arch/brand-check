@@ -63,12 +63,21 @@ def main():
 
     draft = open(args.email_draft).read().strip()
 
-    upload_pdf(args.pdf, f"Brand check draft: {args.brand}")
+    file_id = upload_pdf(args.pdf, f"Brand check draft: {args.brand}")
+
+    # Vetting signal: does the lead's email domain plausibly belong to the brand?
+    brand_slug = "".join(c for c in args.brand.lower() if c.isalnum())
+    domain = args.email.split("@")[-1].lower() if "@" in args.email else ""
+    domain_slug = "".join(c for c in domain.split(".")[0] if c.isalnum()) if domain else ""
+    if brand_slug and domain_slug and (brand_slug in domain_slug or domain_slug in brand_slug):
+        domain_check = ":white_check_mark: email domain matches the brand"
+    else:
+        domain_check = (":warning: email domain does not obviously match the brand. "
+                        "Could be an agency or parent company, your call.")
 
     meta = json.dumps({
         "brand": args.brand, "email": args.email,
-        "firstName": args.first_name,
-        "pdf": os.path.basename(args.pdf),
+        "firstName": args.first_name, "fileId": file_id,
     })
     blocks = [
         {"type": "header",
@@ -77,14 +86,17 @@ def main():
             {"type": "mrkdwn", "text": f"*Lead*\n{args.first_name or 'n/a'} · {args.email or 'n/a'}"},
             {"type": "mrkdwn", "text": f"*Brand*\n{args.brand}"},
         ]},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"*Identity check*\n{domain_check}"}},
         {"type": "section",
          "text": {"type": "mrkdwn",
                   "text": f"*Email that will be sent on approval:*\n```{draft[:2500]}```"}},
         {"type": "actions", "elements": [
             {"type": "button", "style": "primary", "action_id": "brand_check_approve",
              "text": {"type": "plain_text", "text": "Approve and send"}, "value": meta},
-            {"type": "button", "style": "danger", "action_id": "brand_check_reject",
-             "text": {"type": "plain_text", "text": "Reject"}, "value": meta},
+            {"type": "button", "style": "danger", "action_id": "brand_check_decline",
+             "text": {"type": "plain_text", "text": "Decline: not from brand"}, "value": meta},
+            {"type": "button", "action_id": "brand_check_discard",
+             "text": {"type": "plain_text", "text": "Discard (spam)"}, "value": meta},
         ]},
     ]
     if args.hubspot_url:

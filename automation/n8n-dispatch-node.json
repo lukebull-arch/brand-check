@@ -1,0 +1,36 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/lukebull-arch/brand-check/dispatches",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_WITH_GITHUB_PAT"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event_type\": \"brand-check\",\n  \"client_payload\": {\n    \"brand\": \"{{ $json.brand }}\",\n    \"email\": \"{{ $json.email }}\",\n    \"firstName\": \"{{ $json.firstName }}\",\n    \"hubspotUrl\": \"{{ $json.hubspotUrl }}\"\n  }\n}",
+        "options": {}
+      },
+      "name": "Trigger report build",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        -680
+      ],
+      "id": "96a10c2e-9f77-47d8-9fdc-b6315dea5ad1"
+    }
+  ],
+  "connections": {}
+}
