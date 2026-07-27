@@ -38,17 +38,22 @@ YT_PLATFORMS = ["roblox", "fortnite", "minecraft"]
 
 
 def http_json(url, cookie=None):
+    """GET with patient retries. Datacenter IPs (CI runners) get rate limited
+    aggressively, so back off exponentially and honour Retry-After."""
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
     if cookie:
         req.add_header("Cookie", f".ROBLOSECURITY={cookie}")
-    for attempt in (1, 2):
+    delay = 15
+    for attempt in range(6):
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
-            if e.code == 429 and attempt == 1:
-                print("  rate limited, backing off 20s...")
-                time.sleep(20)
+            if e.code in (429, 503) and attempt < 5:
+                wait = max(delay, int(e.headers.get("Retry-After") or 0))
+                print(f"  rate limited ({e.code}), waiting {wait}s (attempt {attempt + 1}/5)...")
+                time.sleep(wait)
+                delay = min(delay * 2, 120)
                 continue
             raise
     return None
@@ -69,7 +74,11 @@ def grab_items(brand, cookie, pages, out_dir):
     rows, cursor = [], ""
     for page in range(pages):
         q = urllib.parse.urlencode({"Keyword": brand, "Limit": 30, "Cursor": cursor})
-        data = http_json(f"https://catalog.roblox.com/v1/search/items/details?{q}", cookie)
+        try:
+            data = http_json(f"https://catalog.roblox.com/v1/search/items/details?{q}", cookie)
+        except Exception as e:
+            print(f"  items page {page + 1} failed ({e}); keeping {len(rows)} rows collected so far")
+            break
         batch = data.get("data") or []
         for d in batch:
             kind = "bundles" if d.get("itemType") == "Bundle" else "catalog"
@@ -104,7 +113,11 @@ def grab_games(brand, cookie, pages, out_dir):
             "searchQuery": brand, "pageType": "all",
             "sessionId": session, "pageToken": token,
         })
-        data = http_json(f"https://apis.roblox.com/search-api/omni-search?{q}", cookie)
+        try:
+            data = http_json(f"https://apis.roblox.com/search-api/omni-search?{q}", cookie)
+        except Exception as e:
+            print(f"  games page {page + 1} failed ({e}); keeping {len(rows)} rows collected so far")
+            break
         batch = []
         for group in data.get("searchResults") or []:
             if group.get("contentGroupType") != "Game":

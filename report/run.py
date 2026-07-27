@@ -352,8 +352,10 @@ def main():
     if not csv_dir:
         csv_dir = os.path.join(out_dir, "data")
         print("== collecting ==")
-        subprocess.run([sys.executable, COLLECTOR, "--brand", args.brand,
-                        "--out", csv_dir], check=True)
+        result = subprocess.run([sys.executable, COLLECTOR, "--brand", args.brand,
+                                 "--out", csv_dir])
+        if result.returncode != 0:
+            print(f"collector exited {result.returncode}; building from whatever was collected")
 
     print("== analysing ==")
     a = analyse(csv_dir, args.brand)
