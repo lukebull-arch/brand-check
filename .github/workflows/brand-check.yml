@@ -1,0 +1,83 @@
+name: Brand check report
+
+on:
+  # n8n fires this when a validated lead arrives
+  repository_dispatch:
+    types: [brand-check]
+  # manual runs for testing: Actions tab -> Run workflow
+  workflow_dispatch:
+    inputs:
+      brand:
+        description: "Brand name"
+        required: true
+      email:
+        description: "Lead email (optional for tests)"
+        required: false
+        default: ""
+      first_name:
+        description: "Lead first name (optional)"
+        required: false
+        default: ""
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install --quiet reportlab
+
+      - name: Resolve inputs
+        id: inputs
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "brand=${{ github.event.client_payload.brand }}" >> "$GITHUB_OUTPUT"
+            echo "email=${{ github.event.client_payload.email }}" >> "$GITHUB_OUTPUT"
+            echo "first_name=${{ github.event.client_payload.firstName }}" >> "$GITHUB_OUTPUT"
+            echo "hubspot_url=${{ github.event.client_payload.hubspotUrl }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "brand=${{ inputs.brand }}" >> "$GITHUB_OUTPUT"
+            echo "email=${{ inputs.email }}" >> "$GITHUB_OUTPUT"
+            echo "first_name=${{ inputs.first_name }}" >> "$GITHUB_OUTPUT"
+            echo "hubspot_url=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect data and build report
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: |
+          cd report
+          python3 run.py --brand "${{ steps.inputs.outputs.brand }}"
+
+      - name: Post draft to Slack for approval
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: |
+          BRAND="${{ steps.inputs.outputs.brand }}"
+          SLUG=$(echo "$BRAND" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//;s/-$//')
+          OUT="report/out/$SLUG"
+          python3 automation/post_to_slack.py \
+            --brand "$BRAND" \
+            --email "${{ steps.inputs.outputs.email }}" \
+            --first-name "${{ steps.inputs.outputs.first_name }}" \
+            --hubspot-url "${{ steps.inputs.outputs.hubspot_url }}" \
+            --pdf "$OUT"/GEEIQ_Brand_check_*.pdf \
+            --email-draft "$OUT/email_draft.txt"
+
+      - name: Keep artifacts for the record
+        uses: actions/upload-artifact@v4
+        with:
+          name: brand-check-${{ steps.inputs.outputs.brand }}
+          path: |
+            report/out/**/*.pdf
+            report/out/**/email_draft.txt
+            report/out/**/analyst_summary.txt
+          retention-days: 30
