@@ -14,3 +14,6 @@ collector/out/
 
 # OS noise
 .DS_Store
+
+# logo cache (fetched at build time)
+report/.logo_cache/

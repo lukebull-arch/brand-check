@@ -141,9 +141,25 @@ def render(payload, out_path):
         c.drawImage(f"{ASSETS}/logo-color.png", M, H - M - logo_h,
                     width=logo_h * LOGO_RATIO, height=logo_h,
                     mask="auto", preserveAspectRatio=True)
-        c.setFont("Figtree", 8.5)
-        c.setFillColor(MUTED)
-        c.drawRightString(W - M, H - M - logo_h + 3, right_text)
+        # The brand's own logo sits opposite ours, capped so a tall mark and a
+        # wide wordmark both occupy similar visual weight.
+        logo = payload.get("brand_logo")
+        if logo and os.path.exists(logo.get("path", "")):
+            max_h, max_w = 26, 116
+            lw, lh = logo.get("width", 1), logo.get("height", 1)
+            h_ = min(max_h, max_w * lh / lw)
+            w_ = h_ * lw / lh
+            top = H - M + 4
+            if logo.get("is_light"):
+                c.setFillColor(AMETHYST)
+                c.roundRect(W - M - w_ - 10, top - h_ - 12, w_ + 20, h_ + 14,
+                            5, stroke=0, fill=1)
+            c.drawImage(logo["path"], W - M - w_, top - h_ - 5,
+                        width=w_, height=h_, mask="auto", preserveAspectRatio=True)
+        elif right_text:
+            c.setFont("Figtree", 8.5)
+            c.setFillColor(MUTED)
+            c.drawRightString(W - M, H - M - logo_h + 3, right_text)
 
     def footer(text):
         c.setFont("Figtree", 7.5)
@@ -158,7 +174,7 @@ def render(payload, out_path):
 
     # ================= PAGE 1: the brand's footprint =================
     page_background()
-    header(f"Snapshot: {payload['snapshot']}")
+    header(f"Snapshot: {payload['snapshot']}")  # falls back to text if no logo
 
     y = H - M - 62
     c.setFont("JakartaBold", 26)

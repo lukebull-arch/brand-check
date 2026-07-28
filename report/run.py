@@ -23,6 +23,8 @@ import subprocess
 import sys
 import urllib.request
 
+import brand_logo
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 COLLECTOR = os.path.join(HERE, "..", "collector", "grab.py")
 VENV = os.path.join(HERE, ".venv")
@@ -401,6 +403,15 @@ def main():
         copy = template_copy(a, cands)
     print(f"   copy source: {copy['source']}")
 
+    print("== brand logo ==")
+    logo = None
+    try:
+        logo = brand_logo.fetch(args.brand)
+        print(f"   {logo['source']} | matched {logo['matched']}" if logo
+              else "   no logo found, report will show the snapshot date instead")
+    except Exception as e:
+        print(f"   logo lookup skipped ({type(e).__name__})")
+
     snapshot = datetime.date.today().strftime("%B %Y")
     # The hero figure is decided here, not by the model: it is the top-priority
     # computed candidate, so the biggest credible number always leads the page.
@@ -415,6 +426,7 @@ def main():
     payload = {"brand": args.brand, "snapshot": snapshot,
                "headline": copy["headline"], "stats": stats,
                "reading": copy["reading"],
+               "brand_logo": logo,
                "coverage": {
                    "items_scanned": a["items_total"], "items_matched":
                        a["items_official"] + a["items_fan"],
@@ -439,7 +451,13 @@ def main():
     summary_path = os.path.join(out_dir, "analyst_summary.txt")
     with open(summary_path, "w") as f:
         f.write(f"Brand check summary: {args.brand} ({snapshot})\n")
-        f.write(f"Copy source: {copy['source']}\n\n")
+        f.write(f"Copy source: {copy['source']}\n")
+        if logo:
+            f.write(f"Brand logo: {logo['source']}\n")
+            f.write(f"Logo matched entity: {logo['matched']}  "
+                    f"<- check this is the right company\n\n")
+        else:
+            f.write("Brand logo: none found\n\n")
         f.write(json.dumps({k: v for k, v in a.items()
                             if not k.startswith("sample_")}, indent=2))
         f.write("\n\nSample official rows: " + json.dumps(a["sample_official"]))
