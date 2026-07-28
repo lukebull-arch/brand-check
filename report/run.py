@@ -25,6 +25,10 @@ import urllib.request
 
 import brand_logo
 
+# If fewer than this share of scanned videos actually name the brand, YouTube is
+# mostly keyword collision: keep the figure for context but never let it lead.
+YT_SIGNAL_FLOOR = 0.5
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 COLLECTOR = os.path.join(HERE, "..", "collector", "grab.py")
 VENV = os.path.join(HERE, ".venv")
@@ -164,6 +168,10 @@ def analyse(csv_dir, brand):
         "youtube_scanned": yt_scanned,
         "youtube_named": sum(v["videos"] for v in yt.values()),
         "youtube_dropped_examples": yt_dropped[:6],
+        "youtube_ratio": round(sum(v["videos"] for v in yt.values()) / yt_scanned, 2)
+                         if yt_scanned else 0,
+        "youtube_thin": bool(yt_scanned) and (
+            sum(v["videos"] for v in yt.values()) / yt_scanned) < YT_SIGNAL_FLOOR,
         # Named specifics: what a brand marketer actually wants to see
         "top_games_named": [
             {"name": r["Name"], "visits": to_int(r.get("Visits")),
@@ -228,6 +236,19 @@ def candidates(a):
     if a["live_players"]:
         out.append({"num": fmt(a["live_players"]),
                     "label": f"players inside {a['brand']} experiences at this snapshot"})
+
+    # A hero figure that needs apologising for is not a hero figure. When most
+    # scanned videos were keyword collisions, push YouTube down to context so a
+    # Roblox figure leads instead.
+    if a.get("youtube_thin"):
+        yt_entries = [c for c in out if "YouTube views" in c["label"]
+                      or c["label"].startswith("videos naming")]
+        out = [c for c in out if c not in yt_entries]
+        for c in yt_entries:
+            if "YouTube views" in c["label"]:
+                c["label"] = (f"YouTube views on videos naming {a['brand']}, "
+                              f"mostly outside gaming")
+        out.extend(yt_entries)
     return out
 
 
@@ -317,6 +338,11 @@ num string must be unchanged). Pick the 4 to 6 strongest, put "coral": true on e
 one (the single takeaway). Write a one-sentence headline led by the strongest number,
 and an analyst reading of three to five sentences, 90 words at most: it has a
 fixed slot on the page and longer copy pushes the layout out of shape.
+
+If figures.youtube_thin is true, the YouTube numbers are mostly keyword
+collisions rather than brand content: do not lead the headline with them, do not
+treat them as the main finding, and if you cite them at all say plainly that
+most of that view volume sits outside gaming. Lead on the Roblox figures.
 
 Writing rules, absolute: UK English. No em dashes, use full stops, commas or colons.
 No exclamation marks. Never use: ecosystem, intelligence platform, seamless, leverage,
