@@ -121,10 +121,14 @@ Brands are committing: activity is maturing from one-off experiments into
 always-on presence."
 
 Stat band (verified GEEIQ figures, use verbatim):
-- "1,011" / "new brand activations tracked in 2025"
+- "2,810" / "brand experiences tracked across virtual worlds to date"
 - "1.8" / "average activations per active brand in 2025, the highest on record"
 - "88%" / "of 2025 activity on Roblox and Fortnite"
-- "8 years" / "of GEEIQ tracking"
+- "8 years" / "tracking virtual worlds, since 2018"
+
+Note on 2,810: this is cumulative brand *experiences* from launch tracking.
+Activations are a broader umbrella (integrations, owned worlds, items, ads) and
+labelling experiences as activations repeats a known reporting error.
 
 Closing line: "This check is a snapshot. The full picture, how brands enter
 virtual worlds and where most get it wrong, is in Brands in Gaming 101:

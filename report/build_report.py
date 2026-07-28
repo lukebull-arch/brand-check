@@ -51,12 +51,18 @@ STANDING_BODY = (
     "and communities around the brands they love, with or without permission. "
     "Attention that brands used to buy on other channels now lives inside Roblox, "
     "Fortnite and their peers, and players pay it willingly. Brands are committing: "
-    "activity is maturing from one-off experiments into always-on presence.")
+    "activity is maturing from one-off experiments into always-on presence. GEEIQ "
+    "centralises public and partner data across Roblox, Fortnite and ZEPETO, so "
+    "performance can be read on visits, repeat play and item sales rather than "
+    "reach alone.")
 STANDING_BAND = [
-    ("1,011", "new brand activations tracked in 2025"),
+    # 2,810 is cumulative brand *experiences* from the platform's launch
+    # tracking. Do not relabel it as activations: activations are a broader
+    # umbrella and conflating the two is a known reporting error.
+    ("2,810", "brand experiences tracked across virtual worlds to date"),
     ("1.8", "average activations per active brand in 2025, the highest on record"),
     ("88%", "of 2025 activity on Roblox and Fortnite"),
-    ("8 years", "of GEEIQ tracking"),
+    ("8 years", "tracking virtual worlds, since 2018"),
 ]
 HOW_IT_WORKS = [
     ("Creator-made first",
