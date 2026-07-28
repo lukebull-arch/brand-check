@@ -111,7 +111,7 @@ are doing instead.
 **Bottom half, standing content** (adapt wording to fit, keep figures
 exactly):
 
-Heading: "Virtual worlds, in one page"
+Heading: "An intro to virtual worlds"
 
 Body: "Virtual worlds are creator-led economies. Players build experiences,
 items and communities around the brands they love, with or without

@@ -372,8 +372,10 @@ def render(payload, out_path):
                      f"{cov.get('games_matched', 0)} matched.")
     if cov.get("videos_scanned"):
         plats = ", ".join(cov.get("platforms") or [])
-        lines.append(f"YouTube: {cov['videos_scanned']} videos across "
-                     f"{payload['brand']} searches on {plats}.")
+        named = cov.get("videos_named", cov["videos_scanned"])
+        lines.append(f"YouTube: {cov['videos_scanned']} videos scanned across "
+                     f"{payload['brand']} searches on {plats}, {named} named the "
+                     f"brand and count towards the figures above.")
     else:
         lines.append("YouTube: no matching gaming videos found in the searches we ran.")
     lines.append("Everything above comes from public platform data at the snapshot date. "
@@ -398,7 +400,7 @@ def render(payload, out_path):
     y = H - M - 62
     c.setFont("JakartaBold", 26)
     c.setFillColor(AMETHYST)
-    c.drawString(M, y, "Virtual worlds, in one page")
+    c.drawString(M, y, "An intro to virtual worlds")
 
     y -= 30
     y = draw_wrapped(STANDING_BODY, M, y, "Figtree", 10.5, MUTED,

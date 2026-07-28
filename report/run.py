@@ -53,6 +53,14 @@ def brand_terms(brand):
     return terms
 
 
+def brand_pattern(brand):
+    """Match the brand as a whole token. Substring matching turns Casiopea into
+    Casio and inflates every figure it touches."""
+    parts = [re.escape(t) for t in sorted(brand_terms(brand), key=len, reverse=True)]
+    return re.compile(r"(?<![A-Za-z0-9])(" + "|".join(parts) + r")(?![A-Za-z0-9])",
+                      re.IGNORECASE)
+
+
 def matches(text, terms):
     t = (text or "").lower()
     return any(term in t for term in terms)
@@ -110,14 +118,31 @@ def analyse(csv_dir, brand):
     rated = [int(r["Like %"]) for r in g_match
              if str(r.get("Like %", "")).strip().isdigit()]
 
-    yt = {}
+    # YouTube search returns anything the algorithm thinks is related, so a
+    # keyword-collision video (a piano tutorial for "Casio") can carry hundreds
+    # of millions of views that have nothing to do with the brand. Only videos
+    # that name the brand in the title or channel count towards the figures.
+    pat = brand_pattern(brand)
+    yt, yt_scanned, yt_dropped = {}, 0, []
     for p in ("roblox", "fortnite", "minecraft"):
         rows = read_csv(os.path.join(csv_dir, f"youtube_{p}.csv"))
-        if rows:
+        if not rows:
+            continue
+        yt_scanned += len(rows)
+        named = [r for r in rows
+                 if pat.search(r.get("Title", "") or "")
+                 or pat.search(r.get("Creator", "") or "")]
+        dropped = sorted((r for r in rows if r not in named),
+                         key=lambda r: to_int(r.get("Views")), reverse=True)
+        yt_dropped.extend(
+            f"{(r.get('Title') or '')[:60]} ({fmt(to_int(r.get('Views')))} views)"
+            for r in dropped[:3])
+        if named:
             yt[p] = {
-                "videos": len(rows),
-                "views": sum(to_int(r.get("Views")) for r in rows),
-                "top": max(rows, key=lambda r: to_int(r.get("Views"))),
+                "videos": len(named),
+                "views": sum(to_int(r.get("Views")) for r in named),
+                "top": max(named, key=lambda r: to_int(r.get("Views"))),
+                "scanned": len(rows),
             }
 
     return {
@@ -136,6 +161,9 @@ def analyse(csv_dir, brand):
                      "like_pct": top_game.get("Like %"), "creator": top_game.get("Creator")} if top_game else None,
         "avg_like_pct": round(sum(rated) / len(rated)) if rated else None,
         "youtube": yt,
+        "youtube_scanned": yt_scanned,
+        "youtube_named": sum(v["videos"] for v in yt.values()),
+        "youtube_dropped_examples": yt_dropped[:6],
         # Named specifics: what a brand marketer actually wants to see
         "top_games_named": [
             {"name": r["Name"], "visits": to_int(r.get("Visits")),
@@ -170,7 +198,8 @@ def candidates(a):
     yt_videos = sum(v["videos"] for v in a["youtube"].values())
     if yt_views:
         out.append({"num": fmt(yt_views),
-                    "label": f"YouTube views across {a['brand']} gaming videos analysed"})
+                    "label": f"YouTube views on videos naming {a['brand']} "
+                             f"in gaming content"})
     if a["games_matching"]:
         out.append({"num": str(a["games_matching"]),
                     "label": f"{a['brand']} experiences in the top Roblox search results"})
@@ -194,7 +223,8 @@ def candidates(a):
                     "label": f"average rating across rated {a['brand']} experiences"})
     if yt_videos:
         out.append({"num": str(yt_videos),
-                    "label": f"{a['brand']} videos found across Roblox, Fortnite and Minecraft searches"})
+                    "label": f"videos naming {a['brand']} across Roblox, "
+                             f"Fortnite and Minecraft searches"})
     if a["live_players"]:
         out.append({"num": fmt(a["live_players"]),
                     "label": f"players inside {a['brand']} experiences at this snapshot"})
@@ -433,7 +463,8 @@ def main():
                        a["items_official"] + a["items_fan"],
                    "games_scanned": a["games_matching"] + a["games_noise"],
                    "games_matched": a["games_matching"],
-                   "videos_scanned": sum(v["videos"] for v in a["youtube"].values()),
+                   "videos_scanned": a["youtube_scanned"],
+                   "videos_named": a["youtube_named"],
                    "platforms": [p.capitalize() for p in a["youtube"]],
                },
                "top_games_named": a["top_games_named"],
@@ -461,6 +492,10 @@ def main():
             f.write("Brand logo: none found\n\n")
         f.write(json.dumps({k: v for k, v in a.items()
                             if not k.startswith("sample_")}, indent=2))
+        if a.get("youtube_dropped_examples"):
+            f.write("\n\nYouTube videos excluded as keyword collisions "
+                    "(did not name the brand):\n  - "
+                    + "\n  - ".join(a["youtube_dropped_examples"]))
         f.write("\n\nSample official rows: " + json.dumps(a["sample_official"]))
         f.write("\nSample creator-made rows: " + json.dumps(a["sample_fan"]))
         f.write("\nSample excluded rows: " + json.dumps(a["sample_noise"]))
