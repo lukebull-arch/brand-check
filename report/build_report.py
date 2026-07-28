@@ -72,10 +72,14 @@ HOW_IT_WORKS = [
      "platforms expose real behavioural data, so performance can be judged on "
      "engagement rather than reach alone."),
 ]
-CLOSING = ("This check is a snapshot of what we could see from public platform data. "
-           "The full picture, how brands enter virtual worlds and where most get it "
-           "wrong, is in Brands in Gaming 101: Virtual Worlds.")
-LINKS = "geeiq.com/resources/reports/virtual-worlds-101   ·   geeiq.com/demo"
+CTA_HEAD = "See the full picture for {brand}"
+CTA_BODY = ("This check is a snapshot from public data. The GEEIQ platform tracks brand "
+            "activity across virtual worlds every day, so we can show you what is "
+            "driving it, how your category compares, and where the opening is. "
+            "A 20 minute walkthrough is usually enough to tell.")
+CTA_LINK = ("Book a demo", "https://www.geeiq.com/demo")
+SECONDARY_LINK = ("Or read Brands in Gaming 101: Virtual Worlds",
+                  "https://www.geeiq.com/resources/reports/virtual-worlds-101")
 
 
 def safe_text(text):
@@ -89,6 +93,35 @@ def safe_text(text):
     while "  " in out:
         out = out.replace("  ", " ")
     return out or "Untitled"
+
+
+def _draw_logo(c, path, x, y, w, h):
+    """Draw a logo at (x, y) sized to fit w x h. SVG stays vector so it renders
+    as sharply as the text; anything else falls back to the raster path."""
+    if path.lower().endswith(".svg"):
+        try:
+            from svglib.svglib import svg2rlg
+            from reportlab.graphics import renderPDF
+            d = svg2rlg(path)
+            scale = min(w / d.width, h / d.height)
+            d.width *= scale
+            d.height *= scale
+            d.scale(scale, scale)
+            renderPDF.draw(d, c, x, y)
+            return d.width, d.height
+        except Exception:
+            pass
+    c.drawImage(path, x, y, width=w, height=h, mask="auto", preserveAspectRatio=True)
+    return w, h
+
+
+def _svg_size(path):
+    try:
+        from svglib.svglib import svg2rlg
+        d = svg2rlg(path)
+        return d.width, d.height
+    except Exception:
+        return None
 
 
 def _register_fonts():
@@ -138,15 +171,19 @@ def render(payload, out_path):
 
     def header(right_text):
         logo_h = 15
-        c.drawImage(f"{ASSETS}/logo-color.png", M, H - M - logo_h,
-                    width=logo_h * LOGO_RATIO, height=logo_h,
-                    mask="auto", preserveAspectRatio=True)
+        own = (f"{ASSETS}/logo-color.svg" if os.path.exists(f"{ASSETS}/logo-color.svg")
+               else f"{ASSETS}/logo-color.png")
+        _draw_logo(c, own, M, H - M - logo_h, logo_h * LOGO_RATIO, logo_h)
         # The brand's own logo sits opposite ours, capped so a tall mark and a
         # wide wordmark both occupy similar visual weight.
         logo = payload.get("brand_logo")
         if logo and os.path.exists(logo.get("path", "")):
             max_h, max_w = 26, 116
-            lw, lh = logo.get("width", 1), logo.get("height", 1)
+            if logo.get("vector"):
+                size = _svg_size(logo["path"])
+                lw, lh = size if size else (1, 1)
+            else:
+                lw, lh = logo.get("width", 1), logo.get("height", 1)
             h_ = min(max_h, max_w * lh / lw)
             w_ = h_ * lw / lh
             top = H - M + 4
@@ -154,8 +191,7 @@ def render(payload, out_path):
                 c.setFillColor(AMETHYST)
                 c.roundRect(W - M - w_ - 10, top - h_ - 12, w_ + 20, h_ + 14,
                             5, stroke=0, fill=1)
-            c.drawImage(logo["path"], W - M - w_, top - h_ - 5,
-                        width=w_, height=h_, mask="auto", preserveAspectRatio=True)
+            _draw_logo(c, logo["path"], W - M - w_, top - h_ - 5, w_, h_)
         elif right_text:
             c.setFont("Figtree", 8.5)
             c.setFillColor(MUTED)
@@ -255,16 +291,16 @@ def render(payload, out_path):
                          f"{exact_or_short(it['favorites'])} favourites"))
 
     if findings:
-        ly = section_label("What we found", left_x, block_top)
+        ly = section_label("Highlights", left_x, block_top)
         c.setFillColor(WHITE)
-        rows_h = 15 + len(findings) * 22
+        rows_h = 34 + len(findings) * 22
         c.roundRect(left_x, ly - rows_h + 8, col_w, rows_h, 10, stroke=0, fill=1)
         ry = ly - 8
         for i, (name, metric) in enumerate(findings):
             if i:
                 c.setStrokeColor(RULE)
                 c.setLineWidth(0.6)
-                c.line(left_x + 12, ry + 13, left_x + col_w - 12, ry + 13)
+                c.line(left_x + 12, ry + 6, left_x + col_w - 12, ry + 6)
             c.setFont("FigtreeSemi", 8.6)
             c.setFillColor(AMETHYST)
             c.drawString(left_x + 12, ry,
@@ -273,6 +309,10 @@ def render(payload, out_path):
             c.setFillColor(MUTED)
             c.drawString(left_x + 12, ry - 10, metric)
             ry -= 22
+        c.setFont("Figtree", 7.4)
+        c.setFillColor(MUTED)
+        c.drawString(left_x + 12, ry - 3,
+                     "Top matches by visits, then favourites.")
         left_bottom = ly - rows_h + 8
     else:
         left_bottom = block_top
@@ -321,7 +361,7 @@ def render(payload, out_path):
 
     # ---- coverage: what was searched and what matched ----
     cov = payload.get("coverage") or {}
-    y = min(left_bottom, right_bottom) - 30
+    y = min(left_bottom, right_bottom) - 24
     y = section_label("What we searched", M, y)
     lines = []
     if cov.get("items_scanned"):
@@ -338,8 +378,14 @@ def render(payload, out_path):
         lines.append("YouTube: no matching gaming videos found in the searches we ran.")
     lines.append("Everything above comes from public platform data at the snapshot date. "
                  "Creator-made content is player-made and unaffiliated with the brand.")
-    y = draw_wrapped(" ".join(lines), M, y, "Figtree", 8, MUTED,
-                     W - 2 * M, leading=12.5)
+    cov_text = " ".join(lines)
+    size = 8
+    # Shrink a notch rather than run into the footer on data-heavy brands.
+    while size > 6.6 and (y - len(wrap(cov_text, "Figtree", size, W - 2 * M))
+                          * 12.5) < 58:
+        size -= 0.4
+    draw_wrapped(cov_text, M, y, "Figtree", size, MUTED, W - 2 * M,
+                 leading=size * 1.55)
 
     footer(f"Built by a GEEIQ analyst. Data: GEEIQ platform and public sources, "
            f"{payload['snapshot']}.   Page 1 of 2")
@@ -385,26 +431,51 @@ def render(payload, out_path):
                          W - 2 * M - 40, leading=14.5)
         y -= 38
 
-    # closing block: a tinted card carries the CTA, with the analyst avatar
-    # leaning out of the top so the page ends on something with personality
-    card_h = 128
-    card_bottom = 142
+    # closing block: the demo is the ask, the 101 report is the softer option
+    card_h = 146
+    card_bottom = 132
     c.setFillColor(TINT)
     c.roundRect(M, card_bottom, W - 2 * M, card_h, 14, stroke=0, fill=1)
 
     avatar = f"{ASSETS}/avatar.png"
-    av_w = 132
-    text_w = W - 2 * M - 48 - (av_w - 10 if os.path.exists(avatar) else 0)
-    ty = card_bottom + card_h - 30
-    ty = draw_wrapped(CLOSING, M + 24, ty, "FigtreeSemi", 9.8, AMETHYST,
-                      text_w, leading=14.5)
-    ty -= 20
-    c.setFont("FigtreeSemi", 9.2)
-    c.setFillColor(PURPLE)
-    c.drawString(M + 24, ty, LINKS)
+    has_av = os.path.exists(avatar)
+    av_w = 128
+    text_w = W - 2 * M - 48 - (av_w - 4 if has_av else 0)
 
-    if os.path.exists(avatar):
-        c.drawImage(avatar, W - M - av_w - 6, card_bottom + 4,
+    ty = card_bottom + card_h - 28
+    c.setFont("JakartaBold", 13.5)
+    c.setFillColor(AMETHYST)
+    c.drawString(M + 24, ty, CTA_HEAD.format(brand=payload["brand"]))
+    ty = draw_wrapped(CTA_BODY, M + 24, ty - 19, "Figtree", 9.3, MUTED,
+                      text_w, leading=13.5)
+
+    # primary: a real button, clickable
+    ty -= 26
+    label, url = CTA_LINK
+    bw = pdfmetrics.stringWidth(label, "FigtreeSemi", 9.5) + 34
+    bh = 26
+    c.setFillColor(PURPLE)
+    c.roundRect(M + 24, ty - 8, bw, bh, 13, stroke=0, fill=1)
+    c.setFont("FigtreeSemi", 9.5)
+    c.setFillColor(WHITE)
+    c.drawString(M + 24 + 17, ty, label)
+    c.linkURL(url, (M + 24, ty - 8, M + 24 + bw, ty - 8 + bh), relative=0,
+              thickness=0)
+
+    # secondary: quieter text link, also clickable
+    slabel, surl = SECONDARY_LINK
+    sx = M + 24 + bw + 16
+    c.setFont("FigtreeSemi", 8.8)
+    c.setFillColor(PURPLE)
+    c.drawString(sx, ty, slabel)
+    sw = pdfmetrics.stringWidth(slabel, "FigtreeSemi", 8.8)
+    c.setStrokeColor(PURPLE)
+    c.setLineWidth(0.5)
+    c.line(sx, ty - 2.5, sx + sw, ty - 2.5)
+    c.linkURL(surl, (sx, ty - 5, sx + sw, ty + 10), relative=0, thickness=0)
+
+    if has_av:
+        c.drawImage(avatar, W - M - av_w - 4, card_bottom + 2,
                     width=av_w, height=av_w * (352 / 295),
                     mask="auto", preserveAspectRatio=True)
 

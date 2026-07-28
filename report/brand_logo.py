@@ -75,9 +75,28 @@ def _logo_filename(qid):
 
 
 def _commons_render(filename, width=RENDER_WIDTH):
+    """PNG render of a Commons file at a given width."""
     safe = urllib.parse.quote(filename.replace(" ", "_"))
     url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{safe}?width={width}"
     return _get(url, timeout=30)
+
+
+def _commons_original(filename):
+    """The file as uploaded. For an SVG this keeps the logo vector, which
+    renders as crisply as the surrounding text instead of looking soft."""
+    safe = urllib.parse.quote(filename.replace(" ", "_"))
+    return _get(f"https://commons.wikimedia.org/wiki/Special:FilePath/{safe}", timeout=30)
+
+
+def _svg_renders(path):
+    """An SVG that parses but draws nothing (or substitutes fonts for text) is
+    worse than a raster fallback, so confirm it produces real geometry."""
+    try:
+        from svglib.svglib import svg2rlg
+        d = svg2rlg(path)
+        return bool(d) and d.width > 4 and d.height > 4 and len(d.contents) > 0
+    except Exception:
+        return False
 
 
 def _looks_like_image(raw):
@@ -93,11 +112,14 @@ def fetch(brand, out_dir=None):
     path = os.path.join(out_dir, f"{slug}.png")
     meta_path = os.path.join(out_dir, f"{slug}.json")
 
-    if os.path.exists(path) and os.path.exists(meta_path):
+    svg_cached = os.path.join(out_dir, f"{slug}.svg")
+    if os.path.exists(meta_path):
         try:
             meta = json.load(open(meta_path))
-            meta["path"] = path
-            return meta
+            cached = svg_cached if meta.get("vector") else path
+            if os.path.exists(cached):
+                meta["path"] = cached
+                return meta
         except Exception:
             pass
 
@@ -110,6 +132,19 @@ def fetch(brand, out_dir=None):
             qid = hit["id"]
             matched = f"{hit.get('label', qid)} ({hit.get('description', 'no description')}) [{qid}]"
             fname = _logo_filename(qid)
+            if fname and fname.lower().endswith(".svg"):
+                svg = _commons_original(fname)
+                if svg and b"<svg" in svg[:4000] and len(svg) < MAX_BYTES:
+                    svg_path = os.path.join(out_dir, f"{slug}.svg")
+                    open(svg_path, "wb").write(svg)
+                    if _svg_renders(svg_path):
+                        meta = {"source": f"Wikidata P154 (vector): {fname}",
+                                "matched": matched, "is_light": False,
+                                "vector": True}
+                        json.dump(meta, open(meta_path, "w"))
+                        meta["path"] = svg_path
+                        return meta
+                    os.remove(svg_path)
             if fname:
                 candidate = _commons_render(fname)
                 if _looks_like_image(candidate):

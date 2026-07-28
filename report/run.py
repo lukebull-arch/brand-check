@@ -285,7 +285,8 @@ You are given computed figures. You must not invent, adjust or recompute any num
 use the candidate stats exactly as given (num and label may be lightly reworded but the
 num string must be unchanged). Pick the 4 to 6 strongest, put "coral": true on exactly
 one (the single takeaway). Write a one-sentence headline led by the strongest number,
-and a two to four sentence analyst reading.
+and an analyst reading of three to five sentences, 90 words at most: it has a
+fixed slot on the page and longer copy pushes the layout out of shape.
 
 Writing rules, absolute: UK English. No em dashes, use full stops, commas or colons.
 No exclamation marks. Never use: ecosystem, intelligence platform, seamless, leverage,
