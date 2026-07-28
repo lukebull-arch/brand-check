@@ -51,6 +51,13 @@ def upload_pdf(path, title):
     return got["file_id"]
 
 
+def confirm_dialog(title, text, yes):
+    return {"title": {"type": "plain_text", "text": title},
+            "text": {"type": "mrkdwn", "text": text},
+            "confirm": {"type": "plain_text", "text": yes},
+            "deny": {"type": "plain_text", "text": "Cancel"}}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--brand", required=True)
@@ -92,11 +99,20 @@ def main():
                   "text": f"*Email that will be sent on approval:*\n```{draft[:2500]}```"}},
         {"type": "actions", "elements": [
             {"type": "button", "style": "primary", "action_id": "brand_check_approve",
-             "text": {"type": "plain_text", "text": "Approve and send"}, "value": meta},
+             "text": {"type": "plain_text", "text": "Approve and send"}, "value": meta,
+             "confirm": confirm_dialog(
+                 "Send the report?",
+                 f"This emails the {args.brand} PDF to {args.email}.", "Send it")},
             {"type": "button", "style": "danger", "action_id": "brand_check_decline",
-             "text": {"type": "plain_text", "text": "Decline: not from brand"}, "value": meta},
+             "text": {"type": "plain_text", "text": "Decline: not from brand"}, "value": meta,
+             "confirm": confirm_dialog(
+                 "Decline this request?",
+                 f"This tells {args.email} we could not connect them to {args.brand}.", "Decline")},
             {"type": "button", "action_id": "brand_check_discard",
-             "text": {"type": "plain_text", "text": "Discard (spam)"}, "value": meta},
+             "text": {"type": "plain_text", "text": "Discard (spam)"}, "value": meta,
+             "confirm": confirm_dialog(
+                 "Discard this request?",
+                 "Nothing is sent to the requester.", "Discard")},
         ]},
     ]
     if args.hubspot_url:
