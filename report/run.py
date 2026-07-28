@@ -274,7 +274,11 @@ unlock, branded activations, benchmark performance, drive ROI. No "not X, it's Y
 unofficial: never imply the brand made or endorsed it.
 
 Also draft a short delivery email (2-3 sentences, personal, one specific finding,
-offer of a walkthrough, from "[analyst name], GEEIQ", greeting "Hi [first name],").
+offer of a walkthrough). The greeting must be exactly "Hi [first name]," and the
+sign-off exactly "[analyst name], GEEIQ" with the literal square-bracket
+placeholders unchanged: they are substituted later, never invent names. Make no
+claims in the email or the reading beyond the provided figures: no trends, dips,
+comparisons over time, or attributions the data does not contain.
 
 Respond with ONLY a JSON object:
 {"headline": str, "stats": [{"num": str, "label": str, "coral": bool}],
@@ -323,6 +327,9 @@ def claude_copy(a, cands, api_key):
         corals = sum(1 for s in out.get("stats", []) if s.get("coral"))
         if corals != 1:
             problems.append("exactly one stat must have coral true")
+        body_txt = out.get("email_body", "")
+        if "[first name]" not in body_txt or "[analyst name]" not in body_txt:
+            problems.append("email must keep the literal [first name] and [analyst name] placeholders")
         if not problems:
             out["source"] = "claude"
             return out
