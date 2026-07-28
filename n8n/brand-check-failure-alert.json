@@ -1,0 +1,76 @@
+{
+  "name": "Brand check \u2014 failure alert",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "On workflow error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        0
+      ],
+      "id": "6da1c02b-346b-46a0-8a73-7ba6bd91f403"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The error trigger hands us the failed execution. Build a Slack alert that\n// says enough to act on without opening n8n: which workflow, which node, why.\nconst j = $input.first().json;\nconst wf = (j.workflow && j.workflow.name) || 'unknown workflow';\nconst ex = j.execution || {};\nconst node = ex.lastNodeExecuted || 'unknown node';\nconst msg = (ex.error && (ex.error.message || ex.error.description)) || 'no error message';\nconst url = ex.url || '';\n\nconst blocks = [\n  { type: 'header',\n    text: { type: 'plain_text', text: 'Brand check failed' } },\n  { type: 'section', fields: [\n    { type: 'mrkdwn', text: `*Workflow*\\n${wf}` },\n    { type: 'mrkdwn', text: `*Failed at*\\n${node}` },\n  ]},\n  { type: 'section',\n    text: { type: 'mrkdwn', text: `*Reason*\\n\\`\\`\\`${String(msg).slice(0, 800)}\\`\\`\\`` } },\n];\nif (url) {\n  blocks.push({ type: 'actions', elements: [\n    { type: 'button', text: { type: 'plain_text', text: 'Open execution in n8n' },\n      url, action_id: 'open_execution' },\n  ]});\n}\nblocks.push({ type: 'context', elements: [\n  { type: 'mrkdwn', text: 'Nothing was sent to the requester. The draft above is still actionable once this is fixed.' },\n]});\n\nreturn [{ json: { channel: 'C0BFLT4M3FF', text: `Brand check failed: ${wf} at ${node}`, blocks } }];"
+      },
+      "name": "Build alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -380,
+        0
+      ],
+      "id": "b95f0ff8-8e7f-4492-910d-ed2267d9a501"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "name": "Post failure to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "9928611b-d057-42b1-b1e5-8df428b20fec"
+    }
+  ],
+  "connections": {
+    "On workflow error": {
+      "main": [
+        [
+          {
+            "node": "Build alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build alert": {
+      "main": [
+        [
+          {
+            "node": "Post failure to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
