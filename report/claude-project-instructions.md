@@ -121,14 +121,24 @@ Brands are committing: activity is maturing from one-off experiments into
 always-on presence."
 
 Stat band (verified GEEIQ figures, use verbatim):
-- "2,810" / "brand experiences tracked across virtual worlds to date"
-- "1.8" / "average activations per active brand in 2025, the highest on record"
-- "88%" / "of 2025 activity on Roblox and Fortnite"
-- "8 years" / "tracking virtual worlds, since 2018"
+- "$188.8bn" / "spent on gaming globally, more than music and film combined"
+- "500m" / "monthly players on Roblox alone"
+- "1,011" / "brand activations we tracked in virtual worlds last year"
+- "8 years" / "tracking this market, since 2018"
 
-Note on 2,810: this is cumulative brand *experiences* from launch tracking.
-Activations are a broader umbrella (integrations, owned worlds, items, ads) and
-labelling experiences as activations repeats a known reporting error.
+The band is pitched at a reader who does not know whether their brand appears in
+virtual worlds, so it runs market size, then audience, then peer behaviour, then
+GEEIQ's track record. Sourcing notes, all of which matter:
+
+- $188.8bn and the music/film comparison are Newzoo, third party. The comparison
+  figure covers music and film only: do not add television, the source excludes it.
+- 500m Roblox monthly players comes from the GEEIQ overview deck, which also
+  carries a 380m figure elsewhere. Confirm which is current before publishing.
+- 1,011 is new brand activations in 2025 (SBVW, verified). It is down 17% on
+  2024's 1,220, so use it as scale, never as growth.
+- 2,810 cumulative brand *experiences* is the alternative scale figure. Never
+  label experiences as activations, or as brands: activations are a broader
+  umbrella and that conflation is a known reporting error.
 
 Closing line: "This check is a snapshot. The full picture, how brands enter
 virtual worlds and where most get it wrong, is in Brands in Gaming 101:

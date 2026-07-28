@@ -56,13 +56,13 @@ STANDING_BODY = (
     "performance can be read on visits, repeat play and item sales rather than "
     "reach alone.")
 STANDING_BAND = [
-    # 2,810 is cumulative brand *experiences* from the platform's launch
-    # tracking. Do not relabel it as activations: activations are a broader
-    # umbrella and conflating the two is a known reporting error.
-    ("2,810", "brand experiences tracked across virtual worlds to date"),
-    ("1.8", "average activations per active brand in 2025, the highest on record"),
-    ("88%", "of 2025 activity on Roblox and Fortnite"),
-    ("8 years", "tracking virtual worlds, since 2018"),
+    # Written for a reader who does not yet know whether their brand is in
+    # virtual worlds: market size, then audience, then peer behaviour, then why
+    # GEEIQ would know. Sourcing caveats are in the project notes.
+    ("$188.8bn", "spent on gaming globally, more than music and film combined"),
+    ("500m", "monthly players on Roblox alone"),
+    ("1,011", "brand activations we tracked in virtual worlds last year"),
+    ("8 years", "tracking this market, since 2018"),
 ]
 HOW_IT_WORKS = [
     ("Creator-made first",
