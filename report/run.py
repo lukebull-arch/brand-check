@@ -134,6 +134,24 @@ def analyse(csv_dir, brand):
                      "like_pct": top_game.get("Like %"), "creator": top_game.get("Creator")} if top_game else None,
         "avg_like_pct": round(sum(rated) / len(rated)) if rated else None,
         "youtube": yt,
+        # Named specifics: what a brand marketer actually wants to see
+        "top_games_named": [
+            {"name": r["Name"], "visits": to_int(r.get("Visits")),
+             "like_pct": r.get("Like %"), "creator": r.get("Creator")}
+            for r in sorted(g_match, key=lambda r: to_int(r.get("Visits")), reverse=True)[:4]
+            if to_int(r.get("Visits"))
+        ],
+        "top_items_named": [
+            {"name": r["Name"], "favorites": to_int(r.get("Favorites")),
+             "creator": r.get("Creator"), "price": r.get("Price")}
+            for r in sorted(official + fan, key=fav_key, reverse=True)[:3]
+            if to_int(r.get("Favorites"))
+        ],
+        "platform_views": [
+            {"platform": p.capitalize(), "views": v["views"], "videos": v["videos"],
+             "top_video": v["top"].get("Title", "")}
+            for p, v in yt.items() if v["views"]
+        ],
         "sample_official": [r["Name"] for r in official[:8]],
         "sample_fan": [f"{r['Name']} (by {r['Creator']})" for r in fan[:8]],
         "sample_noise": [r["Name"] for r in noise_items[:8]],
@@ -384,9 +402,30 @@ def main():
     print(f"   copy source: {copy['source']}")
 
     snapshot = datetime.date.today().strftime("%B %Y")
+    # The hero figure is decided here, not by the model: it is the top-priority
+    # computed candidate, so the biggest credible number always leads the page.
+    stats = [dict(s) for s in copy["stats"]]
+    hero_num = cands[0]["num"]
+    if not any(s["num"] == hero_num for s in stats):
+        stats.insert(0, dict(cands[0]))
+    for s in stats:
+        s["coral"] = s["num"] == hero_num
+    stats.sort(key=lambda s: not s["coral"])
+
     payload = {"brand": args.brand, "snapshot": snapshot,
-               "headline": copy["headline"], "stats": copy["stats"],
-               "reading": copy["reading"]}
+               "headline": copy["headline"], "stats": stats,
+               "reading": copy["reading"],
+               "coverage": {
+                   "items_scanned": a["items_total"], "items_matched":
+                       a["items_official"] + a["items_fan"],
+                   "games_scanned": a["games_matching"] + a["games_noise"],
+                   "games_matched": a["games_matching"],
+                   "videos_scanned": sum(v["videos"] for v in a["youtube"].values()),
+                   "platforms": [p.capitalize() for p in a["youtube"]],
+               },
+               "top_games_named": a["top_games_named"],
+               "top_items_named": a["top_items_named"],
+               "platform_views": a["platform_views"]}
 
     print("== rendering ==")
     stamp = datetime.date.today().strftime("%Y-%m")
