@@ -12,6 +12,13 @@ Guardrails: every number in the report is computed here in code; the model
 only selects and words. Its output is linted against the house writing rules
 and every figure it uses is checked against the computed values. Anything
 that fails twice falls back to the template so a report always ships.
+
+Official matching: brand accounts rarely match the submitted name exactly
+("Pizza Hut Official" runs The Hut). Creators are compared on normalised
+names with an optional "official" suffix, and experiences count as official
+when their creator is the brand's account, not just when their name contains
+the brand. Reports always show both sides: the official footprint and the
+creator-made one.
 """
 import argparse
 import csv
@@ -33,6 +40,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 COLLECTOR = os.path.join(HERE, "..", "collector", "grab.py")
 VENV = os.path.join(HERE, ".venv")
 
+
 # ---------- bootstrap: make sure reportlab is importable ----------
 def ensure_reportlab():
     try:
@@ -49,12 +57,32 @@ def ensure_reportlab():
 
 
 # ---------- classification and figures ----------
+def base_brand(brand):
+    """The brand with a trailing 'official' stripped: submissions and account
+    names use it interchangeably ('Pizza Hut' vs 'Pizza Hut Official')."""
+    b = brand.strip()
+    return re.sub(r"\s*official\s*$", "", b, flags=re.I).strip() or b
+
+
 def brand_terms(brand):
-    b = brand.lower().strip()
-    terms = {b}
-    if " " in b:
-        terms.add(b.replace(" ", ""))
+    terms = set()
+    for t in (brand.lower().strip(), base_brand(brand).lower()):
+        if t:
+            terms.add(t)
+            if " " in t:
+                terms.add(t.replace(" ", ""))
     return terms
+
+
+def _norm(s):
+    """Lowercase alphanumerics only: 'Pizza Hut Official' -> 'pizzahutofficial'."""
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def official_creator_norms(brand):
+    """Normalised creator names that count as the brand's own account."""
+    n = _norm(base_brand(brand))
+    return {n, n + "official", _norm(brand)} - {""}
 
 
 def brand_pattern(brand):
@@ -100,12 +128,12 @@ def fmt(n):
 
 def analyse(csv_dir, brand):
     terms = brand_terms(brand)
+    off_norms = official_creator_norms(brand)
     items = read_csv(os.path.join(csv_dir, "roblox_catalog_items.csv"))
     games = read_csv(os.path.join(csv_dir, "roblox_games.csv"))
 
     def is_official(creator):
-        c = (creator or "").lower().strip()
-        return c in terms
+        return _norm(creator) in off_norms
 
     official = [r for r in items if is_official(r["Creator"])]
     fan = [r for r in items if matches(r["Name"], terms) and not is_official(r["Creator"])]
@@ -114,11 +142,23 @@ def analyse(csv_dir, brand):
     fav_key = lambda r: to_int(r.get("Favorites"))
     top_item = max(official + fan, key=fav_key, default=None)
 
-    g_match = [r for r in games if matches(r["Name"], terms)]
+    # An experience is the brand's own when its creator is the brand's
+    # account, whatever the experience is called (The Hut never says Pizza
+    # Hut). A verified-badge creator whose name matches counts too.
+    def is_official_game(r):
+        if is_official(r.get("Creator")):
+            return True
+        return (r.get("Verified Creator") == "yes"
+                and matches(r.get("Creator"), terms))
+
+    g_official = [r for r in games if is_official_game(r)]
+    g_match = [r for r in games if matches(r["Name"], terms) or r in g_official]
     noise_games = [r for r in games if r not in g_match]
     visits = sum(to_int(r.get("Visits")) for r in g_match)
+    official_visits = sum(to_int(r.get("Visits")) for r in g_official)
     live = sum(to_int(r.get("Active Players")) for r in g_match)
     top_game = max(g_match, key=lambda r: to_int(r.get("Visits")), default=None)
+    top_official_game = max(g_official, key=lambda r: to_int(r.get("Visits")), default=None)
     rated = [int(r["Like %"]) for r in g_match
              if str(r.get("Like %", "")).strip().isdigit()]
 
@@ -158,30 +198,38 @@ def analyse(csv_dir, brand):
         "distinct_creators": len(creators),
         "top_item": {"name": top_item["Name"], "favorites": to_int(top_item.get("Favorites"))} if top_item else None,
         "games_matching": len(g_match),
+        "games_official": len(g_official),
         "games_noise": len(noise_games),
         "combined_visits": visits,
+        "official_visits": official_visits,
         "live_players": live,
         "top_game": {"name": top_game["Name"], "visits": to_int(top_game.get("Visits")),
                      "like_pct": top_game.get("Like %"), "creator": top_game.get("Creator")} if top_game else None,
+        "top_official_game": {"name": top_official_game["Name"],
+                              "visits": to_int(top_official_game.get("Visits")),
+                              "like_pct": top_official_game.get("Like %"),
+                              "creator": top_official_game.get("Creator")} if top_official_game else None,
         "avg_like_pct": round(sum(rated) / len(rated)) if rated else None,
         "youtube": yt,
         "youtube_scanned": yt_scanned,
         "youtube_named": sum(v["videos"] for v in yt.values()),
         "youtube_dropped_examples": yt_dropped[:6],
         "youtube_ratio": round(sum(v["videos"] for v in yt.values()) / yt_scanned, 2)
-                         if yt_scanned else 0,
+        if yt_scanned else 0,
         "youtube_thin": bool(yt_scanned) and (
             sum(v["videos"] for v in yt.values()) / yt_scanned) < YT_SIGNAL_FLOOR,
         # Named specifics: what a brand marketer actually wants to see
         "top_games_named": [
             {"name": r["Name"], "visits": to_int(r.get("Visits")),
-             "like_pct": r.get("Like %"), "creator": r.get("Creator")}
+             "like_pct": r.get("Like %"), "creator": r.get("Creator"),
+             "official": bool(is_official_game(r))}
             for r in sorted(g_match, key=lambda r: to_int(r.get("Visits")), reverse=True)[:4]
             if to_int(r.get("Visits"))
         ],
         "top_items_named": [
             {"name": r["Name"], "favorites": to_int(r.get("Favorites")),
-             "creator": r.get("Creator"), "price": r.get("Price")}
+             "creator": r.get("Creator"), "price": r.get("Price"),
+             "official": bool(is_official(r.get("Creator")))}
             for r in sorted(official + fan, key=fav_key, reverse=True)[:3]
             if to_int(r.get("Favorites"))
         ],
@@ -191,6 +239,7 @@ def analyse(csv_dir, brand):
             for p, v in yt.items() if v["views"]
         ],
         "sample_official": [r["Name"] for r in official[:8]],
+        "sample_official_games": [f"{r['Name']} (by {r.get('Creator')})" for r in g_official[:8]],
         "sample_fan": [f"{r['Name']} (by {r['Creator']})" for r in fan[:8]],
         "sample_noise": [r["Name"] for r in noise_items[:8]],
     }
@@ -208,6 +257,12 @@ def candidates(a):
         out.append({"num": fmt(yt_views),
                     "label": f"YouTube views on videos naming {a['brand']} "
                              f"in gaming content"})
+    if a["games_official"]:
+        out.append({"num": str(a["games_official"]),
+                    "label": f"official {a['brand']} experiences live on Roblox"})
+    if a["official_visits"]:
+        out.append({"num": fmt(a["official_visits"]),
+                    "label": f"lifetime visits to the brand's own experiences"})
     if a["games_matching"]:
         out.append({"num": str(a["games_matching"]),
                     "label": f"{a['brand']} experiences in the top Roblox search results"})
@@ -276,9 +331,16 @@ def template_copy(a, cands):
     stats = cands[:6]
     if stats:
         stats[0] = {**stats[0], "coral": True}
-    if a["items_official"]:
+    has_official = a["items_official"] or a["games_official"]
+    if has_official:
         angle = "official"
-        if a["combined_visits"]:
+        if a["games_official"] and a["official_visits"]:
+            headline = (f"{a['brand']} runs an official presence on Roblox: "
+                        f"{a['games_official']} live experience"
+                        f"{'s' if a['games_official'] != 1 else ''} with "
+                        f"{fmt(a['official_visits'])} lifetime visits, plus what "
+                        "players have built around the brand.")
+        elif a["combined_visits"]:
             headline = (f"{a['brand']} runs an official presence on Roblox, and players "
                         f"have built around it: {fmt(a['combined_visits'])} lifetime visits "
                         "across matching experiences.")
@@ -339,6 +401,12 @@ one (the single takeaway). Write a one-sentence headline led by the strongest nu
 and an analyst reading of three to five sentences, 90 words at most: it has a
 fixed slot on the page and longer copy pushes the layout out of shape.
 
+Both sides, always: when the brand has an official presence (figures.items_official
+or figures.games_official above zero), still report the creator-made footprint
+alongside it, and when the presence is entirely creator-made say no official
+presence exists. The contrast between official and player-made is the story;
+never let one side crowd the other out entirely.
+
 If figures.youtube_thin is true, the YouTube numbers are mostly keyword
 collisions rather than brand content: do not lead the headline with them, do not
 treat them as the main finding, and if you cite them at all say plainly that
@@ -387,7 +455,7 @@ def claude_copy(a, cands, api_key):
         try:
             out = json.loads(re.search(r"\{.*\}", text, re.S).group(0))
         except Exception:
-            print(f"   claude attempt {attempt} rejected: reply was not parseable JSON "
+            print(f"  claude attempt {attempt} rejected: reply was not parseable JSON "
                   f"(stop_reason={resp.get('stop_reason')}, {len(text)} chars)")
             feedback = "Your reply was not valid JSON. Respond with only the JSON object."
             continue
@@ -410,9 +478,9 @@ def claude_copy(a, cands, api_key):
         if not problems:
             out["source"] = "claude"
             return out
-        print(f"   claude attempt {attempt} rejected: {'; '.join(problems)}")
+        print(f"  claude attempt {attempt} rejected: {'; '.join(problems)}")
         feedback = ("Fix these problems and resend the full JSON: " + "; ".join(problems))
-    print("   claude output failed guardrails twice; falling back to template")
+    print("  claude output failed guardrails twice; falling back to template")
     return None
 
 
@@ -458,16 +526,16 @@ def main():
             print(f"Claude call failed ({e}); using template copy")
     if not copy:
         copy = template_copy(a, cands)
-    print(f"   copy source: {copy['source']}")
+    print(f"  copy source: {copy['source']}")
 
     print("== brand logo ==")
     logo = None
     try:
         logo = brand_logo.fetch(args.brand)
-        print(f"   {logo['source']} | matched {logo['matched']}" if logo
-              else "   no logo found, report will show the snapshot date instead")
+        print(f"  {logo['source']} | matched {logo['matched']}" if logo
+              else "  no logo found, report will show the snapshot date instead")
     except Exception as e:
-        print(f"   logo lookup skipped ({type(e).__name__})")
+        print(f"  logo lookup skipped ({type(e).__name__})")
 
     snapshot = datetime.date.today().strftime("%B %Y")
     # The hero figure is decided here, not by the model: it is the top-priority
@@ -512,7 +580,7 @@ def main():
         f.write(f"Copy source: {copy['source']}\n")
         if logo:
             f.write(f"Brand logo: {logo['source']}\n")
-            f.write(f"Logo matched entity: {logo['matched']}  "
+            f.write(f"Logo matched entity: {logo['matched']} "
                     f"<- check this is the right company\n\n")
         else:
             f.write("Brand logo: none found\n\n")
@@ -520,15 +588,16 @@ def main():
                             if not k.startswith("sample_")}, indent=2))
         if a.get("youtube_dropped_examples"):
             f.write("\n\nYouTube videos excluded as keyword collisions "
-                    "(did not name the brand):\n  - "
-                    + "\n  - ".join(a["youtube_dropped_examples"]))
+                    "(did not name the brand):\n - "
+                    + "\n - ".join(a["youtube_dropped_examples"]))
         f.write("\n\nSample official rows: " + json.dumps(a["sample_official"]))
+        f.write("\nSample official experiences: " + json.dumps(a["sample_official_games"]))
         f.write("\nSample creator-made rows: " + json.dumps(a["sample_fan"]))
         f.write("\nSample excluded rows: " + json.dumps(a["sample_noise"]))
         if copy.get("notes_for_analyst"):
             f.write("\n\nModel notes: " + copy["notes_for_analyst"])
 
-    print(f"\nDone.\n  PDF:     {pdf_path}\n  Email:   {email_path}\n  Summary: {summary_path}")
+    print(f"\nDone.\n  PDF: {pdf_path}\n  Email: {email_path}\n  Summary: {summary_path}")
 
 
 if __name__ == "__main__":
