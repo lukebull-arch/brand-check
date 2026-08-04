@@ -378,11 +378,19 @@ def template_copy(a, cands):
         "The open question is who serves it." if angle == "whitespace" else
         f"The next question is how the official presence captures the demand "
         "players are already showing.")
+    bullet_lines = "\n".join(f"- {s['num']} {s['label']}" for s in stats[:3])
     email_body = (
-        f"Hi [first name],\n\nYour brand check is attached. The headline: "
-        f"{headline[0].lower()}{headline[1:]}\n\nIf you would like a walkthrough "
-        "of what is in there and what your category is doing, I am happy to set "
-        "up 20 minutes.\n\n[analyst name], GEEIQ")
+        f"Hi [first name],\n\n"
+        f"Thanks for asking us to look at {a['brand']}. Your report is attached: "
+        "one page, built by a GEEIQ analyst from our platform data.\n\n"
+        f"The headline: {headline}\n\n"
+        f"Numbers worth your attention:\n{bullet_lines}\n\n"
+        "The report also covers how your category shows up across Roblox, "
+        "Fortnite and other platforms, and where brands usually get their "
+        "first move wrong.\n\n"
+        f"If you would like a walkthrough of what is in there and what it means "
+        f"for {a['brand']}, reply to this email and I will set up 20 minutes.\n\n"
+        "[analyst name], GEEIQ")
     return {
         "headline": headline,
         "stats": stats,
@@ -418,12 +426,26 @@ unlock, branded activations, benchmark performance, drive ROI. No "not X, it's Y
 "not X, but Y" constructions. Sentence case. Creator-made content is player-made and
 unofficial: never imply the brand made or endorsed it.
 
-Also draft a short delivery email (2-3 sentences, personal, one specific finding,
-offer of a walkthrough). The greeting must be exactly "Hi [first name]," and the
-sign-off exactly "[analyst name], GEEIQ" with the literal square-bracket
-placeholders unchanged: they are substituted later, never invent names. Make no
-claims in the email or the reading beyond the provided figures: no trends, dips,
-comparisons over time, or attributions the data does not contain.
+Also draft the delivery email as plain text with this exact structure:
+- Greeting line, exactly "Hi [first name],"
+- One short paragraph: thank them for asking us to look at the brand, and say
+  the report is attached: one page, built by a GEEIQ analyst from our platform
+  data.
+- One paragraph starting exactly "The headline: " followed by the single
+  strongest finding in one sentence, brand name capitalised as the brand writes
+  it.
+- The line "Numbers worth your attention:" then 2 or 3 bullets, each a hyphen
+  and one candidate stat (num string unchanged) with a short plain label.
+- One line on what else the report covers: how their category shows up across
+  Roblox, Fortnite and other platforms, and where brands usually get their
+  first move wrong.
+- One closing line offering a 20 minute walkthrough of what it means for the
+  brand, asking them to reply to this email.
+- Sign-off exactly "[analyst name], GEEIQ"
+The greeting and sign-off placeholders stay literal square brackets: they are
+substituted later, never invent names. Make no claims in the email or the
+reading beyond the provided figures: no trends, dips, comparisons over time,
+or attributions the data does not contain.
 
 Respond with ONLY a JSON object:
 {"headline": str, "stats": [{"num": str, "label": str, "coral": bool}],
