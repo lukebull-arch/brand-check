@@ -302,6 +302,11 @@ def grab_games(brand, cookie, pages, out_dir, officials=None):
             row["Creator"] = creator.get("name", "") or row.get("Creator", "")
             row["Creator Type"] = creator.get("type", "")
             row["Verified Creator"] = "yes" if creator.get("hasVerifiedBadge") else ""
+            # Brand-sanctioned activations often run under a partner studio's
+            # account ("Formula E - Electric Lap"), so the creator name proves
+            # nothing. The description is where the partnership is declared.
+            # Stored raw; report/run.py decides what counts.
+            row["Description"] = re.sub(r"\s+", " ", (g.get("description") or ""))[:2000]
             if not row.get("Active Players"):
                 row["Active Players"] = g.get("playing", 0) or 0
         # Fill missing like ratios (group-sourced rows have none from search).
@@ -320,7 +325,8 @@ def grab_games(brand, cookie, pages, out_dir, officials=None):
         print(f"  games enrichment: {min(i + 50, len(ids))}/{len(ids)}")
         time.sleep(PAUSE_S)
     for r in rows:  # ensure consistent columns even if a batch failed
-        for col in ("Visits", "Favorites", "Creator Type", "Verified Creator"):
+        for col in ("Visits", "Favorites", "Creator Type", "Verified Creator",
+                    "Description"):
             r.setdefault(col, "")
 
     path = os.path.join(out_dir, "roblox_games.csv")

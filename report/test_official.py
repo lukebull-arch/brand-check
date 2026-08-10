@@ -73,6 +73,47 @@ CASES = [
 ]
 
 
+# Descriptions. A brand's activation is often run by a partner studio whose
+# account name says nothing, so the description is the only signal. "official"
+# used loosely by a fan group must not trip it.
+# (brand, description, expected, why)
+DESC_CASES = [
+    ("Formula E",
+     "This official Formula E–sponsored Roblox racing experience puts players "
+     "behind the wheel of authentic electric single-seaters.",
+     True, "the real Formula E description, en dash and all"),
+    ("Formula E", "Sponsored by Formula E. Race weekly.", True, "sponsored by"),
+    ("Nike", "Built in partnership with Nike.", True, "partnership with"),
+    ("Gucci", "An officially licensed experience.", True, "officially licensed"),
+
+    # Fan phrasing that must not read as a brand partnership.
+    ("Greggs", "Welcome to the official Greggs fan group! We are not affiliated "
+               "with the real Greggs.", False,
+     "fan group calling itself official: the disclaimer wins"),
+    ("Greggs", "The official Greggs bakery experience, fan made", False,
+     "'fan made' voids the claim"),
+    ("Greggs", "The best Greggs roleplay on Roblox. Official server: discord.gg/x",
+     False, "'official' not attached to the brand"),
+    ("Greggs", "Greggs sim, unofficial fan build", False, "unofficial fan build"),
+    ("Greggs", "The unofficial Greggs experience", False, "unofficial must not match official"),
+    ("KFC", "Escape the KFC! An obby for KFC lovers.", False, "fan obby"),
+    ("KFC", "Officially the hardest KFC obby", False, "'officially' as an adverb, no licence claim"),
+    ("Naruto", "Naruto themed tycoon, not affiliated", False, "explicitly unaffiliated"),
+]
+
+
+def check_descriptions():
+    failures = []
+    print("\n-- description rule --")
+    for brand, desc, expected, why in DESC_CASES:
+        got = run.sanctioned_activation(brand, desc)
+        ok = got == expected
+        if not ok:
+            failures.append((brand, desc[:40], expected, got, why))
+        print(f"{'ok  ' if ok else 'FAIL'} {brand:12} sanctioned={got!s:5} ({why})")
+    return failures
+
+
 def main():
     failures = []
     for brand, creator, verified, expected, why in CASES:
@@ -83,13 +124,16 @@ def main():
         print(f"{'ok  ' if ok else 'FAIL'} {brand:20} {creator!r:24} "
               f"verified={str(verified):5} official={got!s:5} ({why})")
 
+    failures += check_descriptions()
+
     print()
+    total = len(CASES) + len(DESC_CASES)
     if failures:
-        print(f"{len(failures)} of {len(CASES)} FAILED")
+        print(f"{len(failures)} of {total} FAILED")
         for f in failures:
             print("   ", f)
         return 1
-    print(f"all {len(CASES)} cases passed")
+    print(f"all {total} cases passed")
     return 0
 
 

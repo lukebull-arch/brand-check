@@ -13,12 +13,20 @@ only selects and words. Its output is linted against the house writing rules
 and every figure it uses is checked against the computed values. Anything
 that fails twice falls back to the template so a report always ships.
 
-Official matching: brand accounts rarely match the submitted name exactly
-("Pizza Hut Official" runs The Hut). Creators are compared on normalised
-names with an optional "official" suffix, and experiences count as official
-when their creator is the brand's account, not just when their name contains
-the brand. Reports always show both sides: the official footprint and the
-creator-made one.
+Official matching, in three layers, because getting this wrong in either
+direction damages the report:
+
+1. Exact creator name, allowing for case and spacing ("Pizza Hut Official"
+   runs The Hut). Punctuation stays significant so accounts imitating the
+   brand ("Gregg's TM") stay out.
+2. A punctuation variant plus Roblox's verified badge, the one signal an
+   imitator cannot award itself.
+3. A description declaring a brand-sanctioned activation, because partners
+   often run these under their own account ("Formula E - Electric Lap"). Any
+   disclaimer in the description voids the claim.
+
+Reports always show both sides: the official footprint and the creator-made
+one. See report/test_official.py.
 """
 import argparse
 import csv
@@ -99,6 +107,53 @@ def loose_creator_norms(brand):
     return {n, n + "official", _loose(brand)} - {""}
 
 
+def sanctioned_pattern(brand):
+    """Matches a description declaring a brand-sanctioned activation.
+
+    A brand's own activation is often built and run by a partner studio, whose
+    account name says nothing ("Formula E - Electric Lap" runs Formula E's
+    official racing experience). The partnership is declared in the
+    description, so that is where to look. The phrasings are deliberately
+    narrow and must name the brand: "official" on its own is a word fan groups
+    use about themselves constantly. Checked against 448 real descriptions
+    across Greggs, KFC and adidas with no false positives.
+    """
+    b = re.escape(brand.strip()).replace(r"\ ", r"\s*")
+    dash = r"[-‐-―−]"
+    parts = [
+        # \b matters: without it "unofficial Greggs" matches "official Greggs".
+        rf"\bofficial(?:ly)?\s+(?:licensed\s+)?{b}\b",
+        rf"\b{b}\s*{dash}\s*sponsored",
+        rf"sponsored\s+by\s+{b}\b",
+        rf"in\s+partnership\s+with\s+{b}\b",
+        rf"official\s+partner\s+of\s+{b}\b",
+        rf"\bofficially\s+licensed\b",
+    ]
+    return re.compile("|".join(parts), re.I)
+
+
+# Fan builds say this about themselves constantly, and often in the same
+# breath as calling themselves "the official <brand> fan group".
+_DISCLAIMER = re.compile(
+    r"\b(?:un\s*official"
+    r"|not\s+(?:affiliated|endorsed|associated|sponsored|owned)"
+    r"|no\s+affiliation"
+    r"|fan[\s\-_]*(?:group|made|game|project|server|club)"
+    r"|not\s+an?\s+official)\b", re.I)
+
+
+def sanctioned_activation(brand, description):
+    """True when a description declares the experience as the brand's own.
+
+    Any disclaimer in the text voids it, whatever else the description claims.
+    A build that calls itself a fan group is telling you what it is.
+    """
+    d = description or ""
+    if _DISCLAIMER.search(d):
+        return False
+    return bool(sanctioned_pattern(brand).search(d))
+
+
 def brand_pattern(brand):
     """Match the brand as a whole token. Substring matching turns Casiopea into
     Casio and inflates every figure it touches."""
@@ -168,10 +223,16 @@ def analyse(csv_dir, brand):
     # account, whatever the experience is called (The Hut never says Pizza
     # Hut).
     def is_official_game(r):
-        return is_official(r.get("Creator"),
-                           verified=r.get("Verified Creator") == "yes")
+        if is_official(r.get("Creator"),
+                       verified=r.get("Verified Creator") == "yes"):
+            return True
+        # Run by a partner, declared as the brand's in the description.
+        return sanctioned_activation(brand, r.get("Description"))
 
     g_official = [r for r in games if is_official_game(r)]
+    g_by_partner = [r for r in g_official
+                    if not is_official(r.get("Creator"),
+                                       verified=r.get("Verified Creator") == "yes")]
 
     # Accounts naming the brand that are not classified as it. Two kinds land
     # here and the data cannot tell them apart: imitations ("Gregg's TM",
@@ -273,6 +334,8 @@ def analyse(csv_dir, brand):
             for p, v in yt.items() if v["views"]
         ],
         "near_official_creators": near,
+        "official_via_partner": [f"{r['Name']} (run by {r.get('Creator')})"
+                                 for r in g_by_partner],
         "sample_official": [r["Name"] for r in official[:8]],
         "sample_official_games": [f"{r['Name']} (by {r.get('Creator')})" for r in g_official[:8]],
         "sample_fan": [f"{r['Name']} (by {r['Creator']})" for r in fan[:8]],
@@ -647,6 +710,11 @@ def main():
             f.write("\n\nYouTube videos excluded as keyword collisions "
                     "(did not name the brand):\n - "
                     + "\n - ".join(a["youtube_dropped_examples"]))
+        if a.get("official_via_partner"):
+            f.write("\n\nCounted as official on the strength of the experience "
+                    "description, not the account name (a partner studio runs "
+                    "these for the brand): "
+                    + json.dumps(a["official_via_partner"]))
         near_list = a.get("near_official_creators") or []
         if near_list:
             shown = near_list[:12]
