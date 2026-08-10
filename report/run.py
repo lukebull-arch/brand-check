@@ -75,14 +75,28 @@ def brand_terms(brand):
 
 
 def _norm(s):
-    """Lowercase alphanumerics only: 'Pizza Hut Official' -> 'pizzahutofficial'."""
+    """Lowercase with spacing removed: 'Pizza Hut' and 'PizzaHut' are the same
+    account. Punctuation and symbols are kept, because that is exactly what
+    separates a brand from an account imitating it: "Gregg's TM" is not Greggs."""
+    return re.sub(r"\s+", "", (s or "").strip().lower())
+
+
+def _loose(s):
+    """Lowercase alphanumerics only. Collapses imitations onto the brand, so it
+    is only ever consulted alongside a verified badge, never on its own."""
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
 def official_creator_norms(brand):
-    """Normalised creator names that count as the brand's own account."""
+    """Creator names that count as the brand's own account."""
     n = _norm(base_brand(brand))
     return {n, n + "official", _norm(brand)} - {""}
+
+
+def loose_creator_norms(brand):
+    """Punctuation-insensitive forms, accepted only for verified accounts."""
+    n = _loose(base_brand(brand))
+    return {n, n + "official", _loose(brand)} - {""}
 
 
 def brand_pattern(brand):
@@ -129,11 +143,19 @@ def fmt(n):
 def analyse(csv_dir, brand):
     terms = brand_terms(brand)
     off_norms = official_creator_norms(brand)
+    loose_norms = loose_creator_norms(brand)
     items = read_csv(os.path.join(csv_dir, "roblox_catalog_items.csv"))
     games = read_csv(os.path.join(csv_dir, "roblox_games.csv"))
 
-    def is_official(creator):
-        return _norm(creator) in off_norms
+    def is_official(creator, verified=False):
+        """The brand's own account. An exact name, allowing for case and
+        spacing, always counts. A punctuation variant counts only when Roblox
+        has verified the account, which is the one signal an imitator cannot
+        award itself. Marketplace rows carry no badge, so they need the exact
+        name."""
+        if _norm(creator) in off_norms:
+            return True
+        return bool(verified) and _loose(creator) in loose_norms
 
     official = [r for r in items if is_official(r["Creator"])]
     fan = [r for r in items if matches(r["Name"], terms) and not is_official(r["Creator"])]
@@ -144,14 +166,21 @@ def analyse(csv_dir, brand):
 
     # An experience is the brand's own when its creator is the brand's
     # account, whatever the experience is called (The Hut never says Pizza
-    # Hut). A verified-badge creator whose name matches counts too.
+    # Hut).
     def is_official_game(r):
-        if is_official(r.get("Creator")):
-            return True
-        return (r.get("Verified Creator") == "yes"
-                and matches(r.get("Creator"), terms))
+        return is_official(r.get("Creator"),
+                           verified=r.get("Verified Creator") == "yes")
 
     g_official = [r for r in games if is_official_game(r)]
+
+    # Accounts that read as the brand but are not it: "Gregg's TM", "Greggs
+    # RBLX". They are treated as creator-made, and listed for the analyst so a
+    # real brand account under an unexpected name can still be caught by eye.
+    near = sorted({r["Creator"] for r in items + games
+                   if r.get("Creator")
+                   and _loose(r["Creator"]) in loose_norms
+                   and not is_official(r.get("Creator"),
+                                       verified=r.get("Verified Creator") == "yes")})
     g_match = [r for r in games if matches(r["Name"], terms) or r in g_official]
     noise_games = [r for r in games if r not in g_match]
     visits = sum(to_int(r.get("Visits")) for r in g_match)
@@ -238,6 +267,7 @@ def analyse(csv_dir, brand):
              "top_video": v["top"].get("Title", "")}
             for p, v in yt.items() if v["views"]
         ],
+        "near_official_creators": near,
         "sample_official": [r["Name"] for r in official[:8]],
         "sample_official_games": [f"{r['Name']} (by {r.get('Creator')})" for r in g_official[:8]],
         "sample_fan": [f"{r['Name']} (by {r['Creator']})" for r in fan[:8]],
@@ -612,6 +642,10 @@ def main():
             f.write("\n\nYouTube videos excluded as keyword collisions "
                     "(did not name the brand):\n - "
                     + "\n - ".join(a["youtube_dropped_examples"]))
+        if a.get("near_official_creators"):
+            f.write("\n\nAccounts that look like the brand but are NOT treated as "
+                    "official (unverified name variants, counted as creator-made): "
+                    + json.dumps(a["near_official_creators"]))
         f.write("\n\nSample official rows: " + json.dumps(a["sample_official"]))
         f.write("\nSample official experiences: " + json.dumps(a["sample_official_games"]))
         f.write("\nSample creator-made rows: " + json.dumps(a["sample_fan"]))
