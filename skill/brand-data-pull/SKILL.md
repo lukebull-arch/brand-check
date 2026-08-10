@@ -20,8 +20,8 @@ Outputs land in `out/<brand>/` in the current directory (override with
 
 | File | Contents |
 |---|---|
-| `roblox_catalog_items.csv` | Marketplace items: Name, ID, URL, Creator, Creator Type, Price (Robux), Favorites, Item Type, Created |
-| `roblox_games.csv` | Experiences: Name, ID, Universe ID, URL, Like %, Active Players, Creator, Up/Down Votes, Sponsored, Visits (lifetime), Favorites, Creator Type, Verified Creator |
+| `roblox_catalog_items.csv` | Marketplace items: Name, ID, URL, Creator, Creator Type, Price (Robux), Favorites, Item Type, Created, Brand Match |
+| `roblox_games.csv` | Experiences: Name, ID, Universe ID, URL, Like %, Active Players, Creator, Up/Down Votes, Sponsored, Visits (lifetime), Favorites, Creator Type, Verified Creator, Brand Match |
 | `youtube_<platform>.csv` | One per platform (roblox, fortnite, minecraft): Title, URL, Video ID, Creator, Creator URL, Views (numeric), Posted, Platform |
 
 Environment:
@@ -37,8 +37,21 @@ understanding it will take a while.
 
 ## Classify before you count
 
-Search results contain rows that have nothing to do with the brand. Put
-every row in one bucket before computing anything:
+Roblox search pads weak queries with popular and semantically similar
+content. For a brand with little real presence, every returned experience
+can be filler: blockbuster games with billions of visits that have nothing
+to do with the brand. The `Brand Match` column makes the first cut
+mechanical:
+
+- **Rows with an empty `Brand Match` are noise. They never enter any
+  figure, under any framing.** No brand term in the name or creator means
+  it is not the brand's content, however large its numbers.
+- If zero experience rows have a brand match, the finding is "no matching
+  Roblox experiences found". Report that plainly and never use the CSV's
+  visit or player totals. The collector prints a warning when this happens;
+  echo it in your summary.
+
+Then put every brand-matched row in one bucket before computing anything:
 
 - **Official**: `Creator` equals the brand name, case-insensitive. Brands
   run verified creator accounts under their own name (adidas does; most
@@ -48,8 +61,8 @@ every row in one bucket before computing anything:
 - **Lookalike**: carries the brand's product-line names without the brand
   word ("Samba Sneakers", "NK Dunk Low"). Usually knockoffs dodging the
   trademark. Flag them separately; never count them in headline figures.
-- **Noise**: no brand term in name or creator. Exclude, and say how many
-  rows you excluded.
+- **Noise**: no brand term in name or creator (`Brand Match` empty).
+  Exclude from all figures, and say how many rows you excluded.
 
 ## Summarise honestly
 
@@ -61,6 +74,9 @@ favourited item, YouTube video count and combined views.
 Rules that keep the summary defensible:
 
 - Every number must trace to CSV rows. No estimates, no extrapolation.
+- Only rows with a non-empty `Brand Match` may enter a figure. Zero
+  matched experiences means "no matching experiences found", whatever
+  else the CSV contains.
 - The Roblox results are the top ~100 by relevance, not a census. Say
   "we found N" or "the top results include N", never "there are N".
 - Date the snapshot (visits are lifetime, player counts are that moment).

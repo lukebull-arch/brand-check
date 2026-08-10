@@ -90,6 +90,7 @@ def grab_items(brand, cookie, pages, out_dir):
         if not cursor or not batch:
             break
         time.sleep(PAUSE_S)
+    mark_brand_match(brand, rows)
     path = os.path.join(out_dir, "roblox_catalog_items.csv")
     write_csv(path, rows)
     return len(rows)
@@ -160,9 +161,32 @@ def grab_games(brand, cookie, pages, out_dir):
         for col in ("Visits", "Favorites", "Creator Type", "Verified Creator"):
             r.setdefault(col, "")
 
+    # Search pads weak queries with popular or semantically similar games.
+    # Stamp each row so downstream counting is mechanical, not judgment.
+    n_match = mark_brand_match(brand, rows)
+    if rows and n_match == 0:
+        print("  WARNING: none of the returned experiences mention the brand. "
+              "Roblox search filled the results with unrelated popular games. "
+              "Report 'no matching experiences found'; do NOT use this CSV's "
+              "visit or player totals.")
+
     path = os.path.join(out_dir, "roblox_games.csv")
     write_csv(path, rows)
     return len(rows)
+
+
+def mark_brand_match(brand, rows):
+    """Add a Brand Match column: brand term in Name, Creator, both, or neither."""
+    brand_l = brand.lower().strip()
+    n = 0
+    for r in rows:
+        in_name = brand_l in str(r.get("Name", "")).lower()
+        in_creator = brand_l in str(r.get("Creator", "")).lower()
+        r["Brand Match"] = ("name+creator" if in_name and in_creator
+                            else "name" if in_name
+                            else "creator" if in_creator else "")
+        n += 1 if r["Brand Match"] else 0
+    return n
 
 
 def grab_youtube(brand, api_key, out_dir):

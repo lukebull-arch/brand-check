@@ -3,26 +3,54 @@ import "./style.css";
 // The webhook that notifies our team. Fulfilment is manual.
 const WEBHOOK_URL = "REPLACE_WITH_N8N_WEBHOOK_URL";
 
-// Free / personal domains we reject in the email gate. Extend as needed.
+// Free / personal domains we reject in the email gate. This must stay
+// identical to BLOCKED_EMAIL_DOMAINS in the n8n validator: the server discards
+// a personal address with a silent 200, which this page reads as success, so
+// any domain missing here becomes a lead lost without trace.
 const FREE_EMAIL_DOMAINS = [
   "gmail.com",
   "googlemail.com",
-  "outlook.com",
-  "hotmail.com",
-  "live.com",
-  "msn.com",
   "yahoo.com",
   "yahoo.co.uk",
+  "ymail.com",
+  "rocketmail.com",
+  "hotmail.com",
+  "hotmail.co.uk",
+  "outlook.com",
+  "live.com",
+  "live.co.uk",
+  "msn.com",
   "icloud.com",
   "me.com",
-  "proton.me",
-  "protonmail.com",
+  "mac.com",
   "aol.com",
   "gmx.com",
+  "gmx.net",
   "gmx.co.uk",
   "mail.com",
+  "proton.me",
+  "protonmail.com",
+  "pm.me",
   "yandex.com",
+  "yandex.ru",
   "zoho.com",
+  "hey.com",
+  "fastmail.com",
+  "tutanota.com",
+  "qq.com",
+  "163.com",
+  "126.com",
+  "mailinator.com",
+  "guerrillamail.com",
+  "10minutemail.com",
+  "tempmail.com",
+  "temp-mail.org",
+  "dosbee.com",
+  "trashmail.com",
+  "getnada.com",
+  "yopmail.com",
+  "sharklasers.com",
+  "throwawaymail.com",
 ];
 
 // Standard email format check.

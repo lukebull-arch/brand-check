@@ -13,13 +13,49 @@ import { addPropertyControls, ControlType, RenderTarget } from "framer"
 // server discards a personal address with a silent 200, which the page reads
 // as success, so anything this list misses becomes a lead lost without trace.
 const FREE_EMAIL_DOMAINS = [
-    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "ymail.com", "rocketmail.com",
-    "hotmail.com", "hotmail.co.uk", "outlook.com", "live.com", "live.co.uk", "msn.com",
-    "icloud.com", "me.com", "mac.com", "aol.com", "gmx.com", "gmx.net", "gmx.co.uk", "mail.com",
-    "proton.me", "protonmail.com", "pm.me", "yandex.com", "yandex.ru", "zoho.com",
-    "hey.com", "fastmail.com", "tutanota.com", "qq.com", "163.com", "126.com",
-    "mailinator.com", "guerrillamail.com", "10minutemail.com", "tempmail.com", "temp-mail.org",
-    "dosbee.com", "trashmail.com", "getnada.com", "yopmail.com", "sharklasers.com", "throwawaymail.com",
+    "gmail.com",
+    "googlemail.com",
+    "yahoo.com",
+    "yahoo.co.uk",
+    "ymail.com",
+    "rocketmail.com",
+    "hotmail.com",
+    "hotmail.co.uk",
+    "outlook.com",
+    "live.com",
+    "live.co.uk",
+    "msn.com",
+    "icloud.com",
+    "me.com",
+    "mac.com",
+    "aol.com",
+    "gmx.com",
+    "gmx.net",
+    "gmx.co.uk",
+    "mail.com",
+    "proton.me",
+    "protonmail.com",
+    "pm.me",
+    "yandex.com",
+    "yandex.ru",
+    "zoho.com",
+    "hey.com",
+    "fastmail.com",
+    "tutanota.com",
+    "qq.com",
+    "163.com",
+    "126.com",
+    "mailinator.com",
+    "guerrillamail.com",
+    "10minutemail.com",
+    "tempmail.com",
+    "temp-mail.org",
+    "dosbee.com",
+    "trashmail.com",
+    "getnada.com",
+    "yopmail.com",
+    "sharklasers.com",
+    "throwawaymail.com",
 ]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -101,7 +137,12 @@ export default function BrandCheckHero(props) {
         const group = merRef.current
         if (!group) return
         const NS = "http://www.w3.org/2000/svg"
-        const CX = 60, R = 54, TOP = 6, BOT = 114, SEAMS = 8, PERIOD = 1800
+        const CX = 60,
+            R = 54,
+            TOP = 6,
+            BOT = 114,
+            SEAMS = 8,
+            PERIOD = 1800
         const paths = []
         for (let i = 0; i < SEAMS; i++) {
             const p = document.createElementNS(NS, "path")
@@ -135,7 +176,8 @@ export default function BrandCheckHero(props) {
             frame(0.6)
             return () => paths.forEach((p) => p.remove())
         }
-        let raf, start = null
+        let raf,
+            start = null
         const tick = (now) => {
             if (start === null) start = now
             frame(((now - start) / PERIOD) * 2 * Math.PI)
@@ -149,6 +191,28 @@ export default function BrandCheckHero(props) {
     }, [state, isCanvas])
 
     // ---- Handlers ----
+    // ---- GA4 funnel events. Fails silently: analytics must never break the form. ----
+    const track = (eventName, params) => {
+        try {
+            if (typeof window !== "undefined" && typeof window.gtag === "function") {
+                window.gtag("event", eventName, params || {})
+            }
+        } catch (err) {
+            // no-op
+        }
+    }
+
+    React.useEffect(() => {
+        if (isCanvas) return
+        const names = {
+            2: "brand_check_started",
+            3: "brand_check_email_gate",
+            4: "brand_check_submitted",
+        }
+        if (names[state]) track(names[state], { brand_name: brand })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state, isCanvas])
+
     const submitBrand = (e) => {
         e.preventDefault()
         const value = brandField.trim()
@@ -311,23 +375,57 @@ export default function BrandCheckHero(props) {
                 }}
             >
                 <defs>
-                    <radialGradient id={`bball-${uid}`} cx="38%" cy="30%" r="80%">
+                    <radialGradient
+                        id={`bball-${uid}`}
+                        cx="38%"
+                        cy="30%"
+                        r="80%"
+                    >
                         <stop offset="0%" stopColor="#F6A860" />
                         <stop offset="46%" stopColor="#E87B2C" />
                         <stop offset="100%" stopColor="#A94C17" />
                     </radialGradient>
-                    <radialGradient id={`bshine-${uid}`} cx="34%" cy="26%" r="44%">
-                        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
-                        <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                    <radialGradient
+                        id={`bshine-${uid}`}
+                        cx="34%"
+                        cy="26%"
+                        r="44%"
+                    >
+                        <stop
+                            offset="0%"
+                            stopColor="#ffffff"
+                            stopOpacity="0.55"
+                        />
+                        <stop
+                            offset="100%"
+                            stopColor="#ffffff"
+                            stopOpacity="0"
+                        />
                     </radialGradient>
-                    <radialGradient id={`bao-${uid}`} cx="50%" cy="102%" r="55%">
-                        <stop offset="0%" stopColor="#331304" stopOpacity="0.5" />
-                        <stop offset="100%" stopColor="#331304" stopOpacity="0" />
+                    <radialGradient
+                        id={`bao-${uid}`}
+                        cx="50%"
+                        cy="102%"
+                        r="55%"
+                    >
+                        <stop
+                            offset="0%"
+                            stopColor="#331304"
+                            stopOpacity="0.5"
+                        />
+                        <stop
+                            offset="100%"
+                            stopColor="#331304"
+                            stopOpacity="0"
+                        />
                     </radialGradient>
                     <linearGradient
                         id={`streak-${uid}`}
                         gradientUnits="userSpaceOnUse"
-                        x1="-6" y1="20" x2="126" y2="20"
+                        x1="-6"
+                        y1="20"
+                        x2="126"
+                        y2="20"
                     >
                         <stop offset="0" stopColor="#E8862F" />
                         <stop offset="0.45" stopColor="#FFDDB0" />
@@ -351,9 +449,14 @@ export default function BrandCheckHero(props) {
                     </clipPath>
                 </defs>
                 <g clipPath={`url(#bclip-${uid})`}>
-                    <rect width="120" height="120" fill={`url(#bball-${uid})`} />
                     <rect
-                        width="120" height="120"
+                        width="120"
+                        height="120"
+                        fill={`url(#bball-${uid})`}
+                    />
+                    <rect
+                        width="120"
+                        height="120"
                         filter={`url(#bgrain-${uid})`}
                         opacity="0.08"
                     />
@@ -370,10 +473,19 @@ export default function BrandCheckHero(props) {
                         strokeWidth="2.6"
                         strokeLinecap="round"
                     />
-                    <circle cx="60" cy="60" r="57" fill={`url(#bshine-${uid})`} />
+                    <circle
+                        cx="60"
+                        cy="60"
+                        r="57"
+                        fill={`url(#bshine-${uid})`}
+                    />
                     <circle cx="60" cy="60" r="57" fill={`url(#bao-${uid})`} />
                 </g>
-                <g className={`bch-streaks-${uid}`} fill="none" strokeLinecap="round">
+                <g
+                    className={`bch-streaks-${uid}`}
+                    fill="none"
+                    strokeLinecap="round"
+                >
                     <path
                         d="M -6 44 Q 60 8 126 40"
                         stroke={`url(#streak-${uid})`}
@@ -435,7 +547,11 @@ export default function BrandCheckHero(props) {
 
             <div
                 key={state}
-                style={{ animation: "bch-fade 0.18s ease", maxWidth: 720, margin: "0 auto" }}
+                style={{
+                    animation: "bch-fade 0.18s ease",
+                    maxWidth: 720,
+                    margin: "0 auto",
+                }}
             >
                 {state === 1 && (
                     <div style={{ position: "relative", paddingTop: 60 }}>
@@ -483,10 +599,22 @@ export default function BrandCheckHero(props) {
                                 padding: "96px 44px 48px",
                             }}
                         >
-                            <h1 style={{ ...headingStyle, fontSize: "clamp(32px, 5vw, 48px)", marginBottom: 14 }}>
+                            <h1
+                                style={{
+                                    ...headingStyle,
+                                    fontSize: "clamp(32px, 5vw, 48px)",
+                                    marginBottom: 14,
+                                }}
+                            >
                                 Check your brand's presence in virtual worlds
                             </h1>
-                            <p style={{ ...bodyStyle, maxWidth: 560, marginBottom: 28 }}>
+                            <p
+                                style={{
+                                    ...bodyStyle,
+                                    maxWidth: 560,
+                                    marginBottom: 28,
+                                }}
+                            >
                                 Find out where your brand already appears across
                                 Roblox, Fortnite and beyond, whether you've
                                 activated or not.
@@ -507,10 +635,20 @@ export default function BrandCheckHero(props) {
                                         Check presence
                                     </button>
                                 </div>
-                                {brandError && <p style={errorStyle}>{brandError}</p>}
+                                {brandError && (
+                                    <p style={errorStyle}>{brandError}</p>
+                                )}
                             </form>
-                            <p style={{ fontFamily: FONT_BODY, fontSize: 14, color: COLORS.muted, marginTop: 18 }}>
-                                Free · built by a GEEIQ analyst · delivered within 2 working days
+                            <p
+                                style={{
+                                    fontFamily: FONT_BODY,
+                                    fontSize: 14,
+                                    color: COLORS.muted,
+                                    marginTop: 18,
+                                }}
+                            >
+                                Free · built by a GEEIQ analyst · delivered
+                                within 2 working days
                             </p>
                         </div>
                     </div>
@@ -518,7 +656,13 @@ export default function BrandCheckHero(props) {
 
                 {state === 2 && (
                     <div>
-                        <h2 style={{ ...headingStyle, fontSize: "clamp(26px, 4vw, 36px)", marginBottom: 18 }}>
+                        <h2
+                            style={{
+                                ...headingStyle,
+                                fontSize: "clamp(26px, 4vw, 36px)",
+                                marginBottom: 18,
+                            }}
+                        >
                             Discovering brand visibility for {brand}
                         </h2>
                         {avatarSrc && (
@@ -530,7 +674,11 @@ export default function BrandCheckHero(props) {
                                     lineHeight: 0,
                                 }}
                             >
-                                <img src={avatarSrc} alt="" style={{ width: "100%" }} />
+                                <img
+                                    src={avatarSrc}
+                                    alt=""
+                                    style={{ width: "100%" }}
+                                />
                                 {/* Erases the photo ball's baked-in streaks; hides under the SVG ball */}
                                 <span
                                     style={{
@@ -563,11 +711,22 @@ export default function BrandCheckHero(props) {
                                     width: `${progress}%`,
                                     background: COLORS.purple,
                                     borderRadius: 999,
-                                    transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+                                    transition:
+                                        "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
                                 }}
                             />
                         </div>
-                        <ul style={{ listStyle: "none", padding: 0, margin: "0 auto", maxWidth: 380, textAlign: "left", display: "grid", gap: 14 }}>
+                        <ul
+                            style={{
+                                listStyle: "none",
+                                padding: 0,
+                                margin: "0 auto",
+                                maxWidth: 380,
+                                textAlign: "left",
+                                display: "grid",
+                                gap: 14,
+                            }}
+                        >
                             {DISCOVERY_STEPS.map((label, i) => (
                                 <li
                                     key={label}
@@ -576,7 +735,10 @@ export default function BrandCheckHero(props) {
                                         alignItems: "center",
                                         gap: 12,
                                         fontFamily: FONT_BODY,
-                                        color: steps[i] === 2 ? COLORS.amethyst : COLORS.muted,
+                                        color:
+                                            steps[i] === 2
+                                                ? COLORS.amethyst
+                                                : COLORS.muted,
                                     }}
                                 >
                                     <span
@@ -587,14 +749,29 @@ export default function BrandCheckHero(props) {
                                             borderRadius: "50%",
                                             boxSizing: "border-box",
                                             border: `2px solid ${steps[i] === 2 ? COLORS.purple : COLORS.tint}`,
-                                            borderTopColor: steps[i] === 1 ? COLORS.purple : undefined,
-                                            background: steps[i] === 2 ? COLORS.purple : "transparent",
-                                            animation: steps[i] === 1 ? "bch-spin 0.7s linear infinite" : undefined,
+                                            borderTopColor:
+                                                steps[i] === 1
+                                                    ? COLORS.purple
+                                                    : undefined,
+                                            background:
+                                                steps[i] === 2
+                                                    ? COLORS.purple
+                                                    : "transparent",
+                                            animation:
+                                                steps[i] === 1
+                                                    ? "bch-spin 0.7s linear infinite"
+                                                    : undefined,
                                             position: "relative",
                                         }}
                                     >
                                         {steps[i] === 2 && (
-                                            <svg viewBox="0 0 18 18" style={{ position: "absolute", inset: 0 }}>
+                                            <svg
+                                                viewBox="0 0 18 18"
+                                                style={{
+                                                    position: "absolute",
+                                                    inset: 0,
+                                                }}
+                                            >
                                                 <path
                                                     d="M 5 9.5 L 8 12.5 L 13.5 6"
                                                     fill="none"
@@ -614,7 +791,13 @@ export default function BrandCheckHero(props) {
 
                 {state === 3 && (
                     <div>
-                        <h2 style={{ ...headingStyle, fontSize: "clamp(26px, 4vw, 36px)", marginBottom: 18 }}>
+                        <h2
+                            style={{
+                                ...headingStyle,
+                                fontSize: "clamp(26px, 4vw, 36px)",
+                                marginBottom: 18,
+                            }}
+                        >
                             We found activity for {brand}
                         </h2>
                         <p style={{ ...bodyStyle, marginBottom: 20 }}>
@@ -623,7 +806,14 @@ export default function BrandCheckHero(props) {
                             days.
                         </p>
                         <form onSubmit={submitEmail} noValidate>
-                            <div style={{ display: "grid", gap: 10, maxWidth: 540, margin: "0 auto" }}>
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gap: 10,
+                                    maxWidth: 540,
+                                    margin: "0 auto",
+                                }}
+                            >
                                 <div className={`bch-row-${uid}`}>
                                     <input
                                         style={fieldStyle}
@@ -676,36 +866,74 @@ export default function BrandCheckHero(props) {
                                 />
                                 <button
                                     type="submit"
-                                    style={{ ...buttonStyle, width: "100%", padding: "16px 24px" }}
+                                    style={{
+                                        ...buttonStyle,
+                                        width: "100%",
+                                        padding: "16px 24px",
+                                    }}
                                     disabled={sending}
                                 >
-                                    {sending ? "Sending..." : "Request my report"}
+                                    {sending
+                                        ? "Sending..."
+                                        : "Request my report"}
                                 </button>
                             </div>
                             {/* Honeypot: hidden from humans, bots fill it */}
                             <div
                                 aria-hidden="true"
-                                style={{ position: "absolute", left: -9999, width: 1, height: 1, overflow: "hidden" }}
+                                style={{
+                                    position: "absolute",
+                                    left: -9999,
+                                    width: 1,
+                                    height: 1,
+                                    overflow: "hidden",
+                                }}
                             >
-                                <label htmlFor={`hp-${uid}`}>Company website</label>
-                                <input id={`hp-${uid}`} ref={hpRef} type="text" tabIndex={-1} autoComplete="off" />
+                                <label htmlFor={`hp-${uid}`}>
+                                    Company website
+                                </label>
+                                <input
+                                    id={`hp-${uid}`}
+                                    ref={hpRef}
+                                    type="text"
+                                    tabIndex={-1}
+                                    autoComplete="off"
+                                />
                             </div>
-                            {emailError && <p style={errorStyle}>{emailError}</p>}
+                            {emailError && (
+                                <p style={errorStyle}>{emailError}</p>
+                            )}
                         </form>
-                        <p style={{ fontFamily: FONT_BODY, fontSize: 14, color: COLORS.muted, marginTop: 18, maxWidth: 460, marginLeft: "auto", marginRight: "auto" }}>
+                        <p
+                            style={{
+                                fontFamily: FONT_BODY,
+                                fontSize: 14,
+                                color: COLORS.muted,
+                                marginTop: 18,
+                                maxWidth: 460,
+                                marginLeft: "auto",
+                                marginRight: "auto",
+                            }}
+                        >
                             Brand checks are built for people who work at the
                             brand, so please use your work email. If you're an
                             agency or studio asking on a client's behalf, book a
-                            demo instead and we'll cover their category properly.
-                            We'll use your email to send your report and
-                            occasional GEEIQ research. Unsubscribe any time.
+                            demo instead and we'll cover their category
+                            properly. We'll use your email to send your report
+                            and occasional GEEIQ research. Unsubscribe any time.
                         </p>
                     </div>
                 )}
 
                 {state === 4 && (
                     <div>
-                        <h2 style={{ ...headingStyle, fontSize: "clamp(26px, 4vw, 36px)", marginBottom: 18 }}>
+                        <h2
+                            style={{
+                                ...headingStyle,
+                                fontSize: "clamp(26px, 4vw, 36px)",
+                                marginBottom: 18,
+                            }}
+                        >
                             Your report is on its way
                         </h2>
                         <p style={{ ...bodyStyle, marginBottom: 20 }}>
@@ -719,7 +947,12 @@ export default function BrandCheckHero(props) {
                         </p>
                         <a
                             href={reportUrl}
-                            style={{ ...buttonStyle, display: "inline-block", textDecoration: "none", opacity: 1 }}
+                            style={{
+                                ...buttonStyle,
+                                display: "inline-block",
+                                textDecoration: "none",
+                                opacity: 1,
+                            }}
                         >
                             Read Brands in Gaming 101
                         </a>
