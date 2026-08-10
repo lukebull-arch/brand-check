@@ -173,12 +173,17 @@ def analyse(csv_dir, brand):
 
     g_official = [r for r in games if is_official_game(r)]
 
-    # Accounts that read as the brand but are not it: "Gregg's TM", "Greggs
-    # RBLX". They are treated as creator-made, and listed for the analyst so a
-    # real brand account under an unexpected name can still be caught by eye.
+    # Accounts naming the brand that are not classified as it. Two kinds land
+    # here and the data cannot tell them apart: imitations ("Gregg's TM",
+    # "Greggs RBLX"), and partner accounts running a genuine sponsored
+    # activation ("Formula E - Electric Lap", which Roblox describes as
+    # officially sponsored). Both stay creator-made in the figures; the analyst
+    # gets the list so a real activation is not reported as absent.
+    near_pat = brand_pattern(brand)
     near = sorted({r["Creator"] for r in items + games
                    if r.get("Creator")
-                   and _loose(r["Creator"]) in loose_norms
+                   and (_loose(r["Creator"]) in loose_norms
+                        or near_pat.search(r["Creator"]))
                    and not is_official(r.get("Creator"),
                                        verified=r.get("Verified Creator") == "yes")})
     g_match = [r for r in games if matches(r["Name"], terms) or r in g_official]
@@ -642,10 +647,16 @@ def main():
             f.write("\n\nYouTube videos excluded as keyword collisions "
                     "(did not name the brand):\n - "
                     + "\n - ".join(a["youtube_dropped_examples"]))
-        if a.get("near_official_creators"):
-            f.write("\n\nAccounts that look like the brand but are NOT treated as "
-                    "official (unverified name variants, counted as creator-made): "
-                    + json.dumps(a["near_official_creators"]))
+        near_list = a.get("near_official_creators") or []
+        if near_list:
+            shown = near_list[:12]
+            more = len(near_list) - len(shown)
+            f.write("\n\nCHECK THESE: accounts naming the brand that are counted as "
+                    "creator-made, not official. Imitators mostly, but a partner "
+                    "account running a sponsored activation looks the same in the "
+                    "data, so confirm before the report says no official presence: "
+                    + json.dumps(shown)
+                    + (f" (+{more} more)" if more else ""))
         f.write("\n\nSample official rows: " + json.dumps(a["sample_official"]))
         f.write("\nSample official experiences: " + json.dumps(a["sample_official_games"]))
         f.write("\nSample creator-made rows: " + json.dumps(a["sample_fan"]))

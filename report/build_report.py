@@ -60,7 +60,7 @@ STANDING_BAND = [
     # virtual worlds: market size, then audience, then peer behaviour, then why
     # GEEIQ would know. Sourcing caveats are in the project notes.
     ("$188.8bn", "spent on gaming globally, more than music and film combined"),
-    ("500m", "monthly players on Roblox alone"),
+    ("380m", "monthly players on Roblox alone"),
     ("1,011", "brand activations we tracked in virtual worlds last year"),
     ("8 years", "tracking this market, since 2018"),
 ]

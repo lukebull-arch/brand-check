@@ -9,11 +9,17 @@ import { addPropertyControls, ControlType, RenderTarget } from "framer"
  * domain re-validation and rate limiting all happen server-side in n8n.
  */
 
+// Must stay identical to BLOCKED_EMAIL_DOMAINS in the n8n validator. The
+// server discards a personal address with a silent 200, which the page reads
+// as success, so anything this list misses becomes a lead lost without trace.
 const FREE_EMAIL_DOMAINS = [
-    "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com",
-    "msn.com", "yahoo.com", "yahoo.co.uk", "icloud.com", "me.com", "proton.me",
-    "protonmail.com", "aol.com", "gmx.com", "gmx.co.uk", "mail.com",
-    "yandex.com", "zoho.com",
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "ymail.com", "rocketmail.com",
+    "hotmail.com", "hotmail.co.uk", "outlook.com", "live.com", "live.co.uk", "msn.com",
+    "icloud.com", "me.com", "mac.com", "aol.com", "gmx.com", "gmx.net", "gmx.co.uk", "mail.com",
+    "proton.me", "protonmail.com", "pm.me", "yandex.com", "yandex.ru", "zoho.com",
+    "hey.com", "fastmail.com", "tutanota.com", "qq.com", "163.com", "126.com",
+    "mailinator.com", "guerrillamail.com", "10minutemail.com", "tempmail.com", "temp-mail.org",
+    "dosbee.com", "trashmail.com", "getnada.com", "yopmail.com", "sharklasers.com", "throwawaymail.com",
 ]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -687,9 +693,12 @@ export default function BrandCheckHero(props) {
                             {emailError && <p style={errorStyle}>{emailError}</p>}
                         </form>
                         <p style={{ fontFamily: FONT_BODY, fontSize: 14, color: COLORS.muted, marginTop: 18, maxWidth: 460, marginLeft: "auto", marginRight: "auto" }}>
-                            Work emails only. We'll use your email to send your
-                            report and occasional GEEIQ research. Unsubscribe any
-                            time.
+                            Brand checks are built for people who work at the
+                            brand, so please use your work email. If you're an
+                            agency or studio asking on a client's behalf, book a
+                            demo instead and we'll cover their category properly.
+                            We'll use your email to send your report and
+                            occasional GEEIQ research. Unsubscribe any time.
                         </p>
                     </div>
                 )}
