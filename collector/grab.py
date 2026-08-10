@@ -78,8 +78,12 @@ def load_cookie(args):
 
 
 def _norm(s):
-    """Lowercase alphanumerics only: 'Pizza Hut Official' -> 'pizzahutofficial'."""
-    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+    """Lowercase with spacing removed, so 'Pizza Hut' and 'PizzaHut' are one
+    account. Punctuation and symbols stay significant: this decides whose whole
+    store gets pulled, and "Gregg's TM" is not Greggs. Kept identical to the
+    rule in report/run.py, because the two drifting apart is how an imitator
+    ends up in a brand's own figures."""
+    return re.sub(r"\s+", "", (s or "").strip().lower())
 
 
 def brand_queries(brand):
