@@ -650,7 +650,11 @@ def claude_copy(a, cands, api_key):
 # ---------- main ----------
 def main():
     ensure_reportlab()
-    from build_report import render
+    from build_report import render as render_legacy
+    try:
+        from render_html import render
+    except Exception:
+        render = render_legacy
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--brand", required=True)
@@ -724,6 +728,7 @@ def main():
                    "videos_named": a["youtube_named"],
                    "platforms": [p.capitalize() for p in a["youtube"]],
                },
+               "youtube_suspect": a.get("youtube_suspect", False),
                "top_games_named": a["top_games_named"],
                "top_items_named": a["top_items_named"],
                "platform_views": a["platform_views"]}
@@ -731,7 +736,12 @@ def main():
     print("== rendering ==")
     stamp = datetime.date.today().strftime("%Y-%m")
     pdf_path = os.path.join(out_dir, f"GEEIQ_Brand_check_{args.brand.replace(' ', '_')}_{stamp}.pdf")
-    render(payload, pdf_path)
+    try:
+        render(payload, pdf_path)
+        print("  renderer: html template")
+    except Exception as e:
+        print(f"  html renderer unavailable ({e}); using legacy layout")
+        render_legacy(payload, pdf_path)
 
     email_path = os.path.join(out_dir, "email_draft.txt")
     with open(email_path, "w") as f:

@@ -1,0 +1,112 @@
+<meta charset="utf-8">
+<title>Brand check: {brand}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700&display=swap');
+  @page {{ size: A4 portrait; margin: 0; }}
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{ font-family: 'Figtree', -apple-system, sans-serif; color: #2E204D; background: #FAF7F2; }}
+  .page {{ width: 210mm; height: 296mm; padding: 14mm 16mm 12mm 16mm; page-break-after: always; position: relative; background: #FAF7F2; }}
+  .page:last-child {{ page-break-after: auto; }}
+  h1, h2, h3 {{ font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; }}
+  .head {{ display: flex; justify-content: space-between; align-items: flex-start; min-height: 12mm; }}
+  .head img {{ display: block; }}
+  .kicker {{ font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7C68FB; margin: 9mm 0 6px 0; }}
+  h1 {{ font-size: 27px; margin: 10px 0 8px 0; }}
+  .headline {{ font-size: 14.5px; line-height: 1.5; color: #4A4060; max-width: 165mm; margin-bottom: 8mm; }}
+  .hero {{ background: #fff; border-left: 4px solid #FC4F3F; border-radius: 10px; padding: 14px 18px; margin-bottom: 6mm; display: flex; align-items: baseline; gap: 14px; }}
+  .hero .num {{ font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 38px; color: #FC4F3F; white-space: nowrap; }}
+  .hero .lbl {{ font-size: 13px; color: #4A4060; line-height: 1.4; }}
+  .grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 6mm; }}
+  .card {{ background: #fff; border-radius: 10px; padding: 13px 15px; }}
+  .card .num {{ font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 21px; color: #7C68FB; display: block; margin-bottom: 2px; }}
+  .card .lbl {{ font-size: 11px; color: #6B5F8A; line-height: 1.4; }}
+  .sec {{ font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7C68FB; margin: 0 0 5px 0; }}
+  .body-text {{ font-size: 12.5px; line-height: 1.55; color: #2E204D; margin-bottom: 6mm; max-width: 172mm; }}
+  .cols {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 6mm; }}
+  .panel {{ background: #fff; border-radius: 10px; padding: 13px 15px; }}
+  .panel h3 {{ font-size: 12.5px; margin-bottom: 8px; }}
+  .row {{ display: flex; justify-content: space-between; font-size: 11.5px; padding: 5px 0; border-bottom: 1px solid #F0EBE2; }}
+  .row:last-child {{ border-bottom: none; }}
+  .row .r {{ color: #6B5F8A; white-space: nowrap; padding-left: 10px; }}
+  .method {{ font-size: 10px; line-height: 1.5; color: #8C82A6; border-top: 1px solid #E7E0D6; padding-top: 8px; }}
+  .foot {{ position: absolute; bottom: 10mm; left: 16mm; right: 16mm; font-size: 9.5px; color: #8C82A6; display: flex; justify-content: space-between; }}
+  .band {{ background: #2E204D; border-radius: 12px; padding: 18px 20px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 8mm; }}
+  .band .num {{ font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 19px; color: #fff; display: block; }}
+  .band .lbl {{ font-size: 10px; color: #C9C0E6; line-height: 1.4; }}
+  .how h3 {{ font-size: 13px; margin: 0 0 3px 0; }}
+  .how p {{ font-size: 12px; line-height: 1.55; color: #4A4060; margin-bottom: 5mm; max-width: 172mm; }}
+  .cta {{ background: #EEEDFE; border-radius: 12px; padding: 18px 20px; margin-top: 8mm; display: flex; gap: 18px; align-items: center; }}
+  .cta h3 {{ font-size: 15px; margin-bottom: 5px; }}
+  .cta p {{ font-size: 12px; line-height: 1.55; color: #4A4060; margin-bottom: 12px; }}
+  .btn {{ display: inline-block; background: #7C68FB; color: #fff; font-weight: 600; font-size: 12.5px; padding: 10px 22px; border-radius: 999px; text-decoration: none; }}
+  .cta .alt {{ font-size: 11.5px; color: #7C68FB; margin-left: 12px; text-decoration: underline; }}
+</style>
+
+<div class="page">
+  <div class="head">
+    <img src="{geeiq_logo}" style="height:26px;">
+    {brand_logo_img}
+  </div>
+
+  <p class="kicker">Brand check &middot; Snapshot {snapshot}</p>
+  <h1>Brand check: {brand}</h1>
+  <p class="headline">{headline}</p>
+
+  <div class="hero">
+    <span class="num">{hero_num}</span>
+    <span class="lbl">{hero_label}</span>
+  </div>
+
+  <div class="grid">
+{cards}
+  </div>
+
+{official_section}
+
+  <p class="sec">What this means</p>
+  <p class="body-text">{reading}</p>
+
+{highlights_section}
+
+  <p class="method">{method}</p>
+
+  <div class="foot"><span>Built by a GEEIQ analyst. Data: GEEIQ platform and public sources, {snapshot}.</span><span>Page 1 of 2</span></div>
+</div>
+
+<div class="page">
+  <div class="head">
+    <img src="{geeiq_logo}" style="height:26px;">
+    {brand_logo_img}
+  </div>
+
+  <h1 style="margin-top:9mm;">An intro to virtual worlds</h1>
+  <p class="body-text" style="margin-bottom:7mm;">Virtual worlds are creator-led economies. Players build experiences, items and communities around the brands they love, with or without permission. Attention that brands used to buy on other channels now lives inside Roblox, Fortnite and their peers, and players pay it willingly. Brands are committing: activity is maturing from one-off experiments into always-on presence. GEEIQ centralises public and partner data across Roblox, Fortnite and ZEPETO, so performance can be read on visits, repeat play and item sales rather than reach alone.</p>
+
+  <div class="band">
+    <div><span class="num">$188.8bn</span><span class="lbl">spent on gaming globally, more than music and film combined</span></div>
+    <div><span class="num">380m</span><span class="lbl">monthly players on Roblox alone</span></div>
+    <div><span class="num">1,011</span><span class="lbl">brand activations we tracked in virtual worlds last year</span></div>
+    <div><span class="num">8 years</span><span class="lbl">tracking this market, since 2018</span></div>
+  </div>
+
+  <div class="how">
+    <p class="sec">How brands enter virtual worlds</p>
+    <h3>Creator-made first</h3>
+    <p>Most brands appear in virtual worlds before they arrive. Players build the items, shops and roleplay worlds themselves, and that activity sets the reference point for how the brand is understood in-platform.</p>
+    <h3>Presence, then permanence</h3>
+    <p>The brands seeing compounding returns treat virtual worlds as an always-on channel rather than a campaign. One-off activations spike and fade; sustained presence accrues an audience.</p>
+    <h3>Measure what players do</h3>
+    <p>Visits, repeat play and item ownership say more than impressions. The platforms expose real behavioural data, so performance can be judged on engagement rather than reach alone.</p>
+  </div>
+
+  <div class="cta">
+    <div style="flex:1;">
+      <h3>See the full picture for {brand}</h3>
+      <p>This check is a snapshot from public data. The GEEIQ platform tracks brand activity across virtual worlds every day, so we can show you what is driving it, how your category compares, and where the opening is. A 20 minute walkthrough is usually enough to tell.</p>
+      <a class="btn" href="https://geeiq.com/demo">Book a demo</a><a class="alt" href="https://geeiq.com">Or read Brands in Gaming 101: Virtual Worlds</a>
+    </div>
+    {avatar_img}
+  </div>
+
+  <div class="foot"><span>Built by a GEEIQ analyst. Data: GEEIQ platform and public sources, {snapshot}.</span><span>Page 2 of 2</span></div>
+</div>
