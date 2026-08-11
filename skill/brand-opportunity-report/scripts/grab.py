@@ -155,10 +155,15 @@ def grab_games(brand, cookie, pages, out_dir):
             row["Creator"] = creator.get("name", "")
             row["Creator Type"] = creator.get("type", "")
             row["Verified Creator"] = "yes" if creator.get("hasVerifiedBadge") else ""
+            # Partner-run brand activations declare themselves in the
+            # description, not the account name ("Formula E - Electric Lap"
+            # runs Formula E's official experience). Keep it for classification.
+            row["Description"] = re.sub(r"\s+", " ", (g.get("description") or ""))[:2000]
         print(f"  games enrichment: {min(i + 50, len(ids))}/{len(ids)}")
         time.sleep(PAUSE_S)
     for r in rows:  # ensure consistent columns even if a batch failed
-        for col in ("Visits", "Favorites", "Creator Type", "Verified Creator"):
+        for col in ("Visits", "Favorites", "Creator Type", "Verified Creator",
+                    "Description"):
             r.setdefault(col, "")
 
     # Search pads weak queries with popular or semantically similar games.

@@ -1,14 +1,15 @@
 ---
 name: brand-opportunity-report
-description: Generate a GEEIQ brand opportunity report for account-based marketing. Pulls a brand's Roblox marketplace and experience data plus YouTube gaming content with the bundled collector, classifies it, and builds a client-ready HTML report showing the brand's footprint and the opportunity in gaming and virtual worlds. Use whenever someone asks for an opportunity report, ABM report, brand check, brand visibility check, or prospect report for a brand, or asks what a brand looks like on Roblox or YouTube. Trigger even for casual phrasings like "what does Nike look like on Roblox", "run a brand check on Casio", or "build me a report for the LVMH pitch".
+description: Generate a GEEIQ brand opportunity report for account-based marketing. Pulls a brand's Roblox marketplace and experience data plus YouTube gaming content with the bundled collector, classifies it, and builds a client-ready report in the approved GEEIQ layout showing the brand's footprint and the opportunity in gaming and virtual worlds. Use whenever someone asks for an opportunity report, ABM report, brand check, brand visibility check, or prospect report for a brand, or asks what a brand looks like on Roblox or YouTube. Trigger even for casual phrasings like "what does Nike look like on Roblox", "run a brand check on Casio", or "build me a report for the LVMH pitch".
 ---
 
 # Brand opportunity report
 
 Turn a brand name into a one-page opportunity report for a sales
-conversation. Three steps, always in this order: collect the data with the
-bundled script, classify every row, then build the report. The reader is a
-marketer at the target brand, so every number must survive them checking it.
+conversation. Four steps, always in this order: collect, classify, verify
+against the GEEIQ platform, then build. The reader is a marketer at the
+target brand, so every number must survive them checking it, and every
+claim must survive them knowing their own deals better than you do.
 
 ## Step 1: Collect
 
@@ -16,162 +17,141 @@ marketer at the target brand, so every number must survive them checking it.
 python3 scripts/grab.py --brand "BRAND NAME"
 ```
 
-Outputs land in `out/<brand>/` in the current directory (override with
-`--out DIR`; `--pages N` raises the Roblox page count, default 5):
+Outputs land in `out/<brand>/` (override with `--out DIR`; `--pages N`
+raises the Roblox page count, default 5):
 
 | File | Contents |
 |---|---|
 | `roblox_catalog_items.csv` | Marketplace items: Name, ID, URL, Creator, Creator Type, Price (Robux), Favorites, Item Type, Created, Brand Match |
-| `roblox_games.csv` | Experiences: Name, ID, Universe ID, URL, Like %, Active Players, Creator, Up/Down Votes, Sponsored, Visits (lifetime), Favorites, Creator Type, Verified Creator, Brand Match |
+| `roblox_games.csv` | Experiences: Name, ID, Universe ID, URL, Like %, Active Players, Creator, Up/Down Votes, Sponsored, Visits (lifetime), Favorites, Creator Type, Verified Creator, Description, Brand Match |
 | `youtube_<platform>.csv` | One per platform (roblox, fortnite, minecraft): Title, URL, Video ID, Creator, Creator URL, Views (numeric), Posted, Platform |
 
-Environment:
-
-- `YOUTUBE_API_KEY` — needed for the YouTube CSVs. Without it they are
-  skipped with a note; say so in the report footnote and in chat rather
-  than silently omitting YouTube.
-- Roblox currently needs no auth. If both Roblox CSVs come back empty, the
-  script prints cookie instructions; relay them to the user.
-
-The script paces itself deliberately (one request per ~1.2s). Run one brand
-at a time. If asked for several brands, warn that each takes a few minutes
-and run them sequentially.
+Environment: `YOUTUBE_API_KEY` for the YouTube CSVs (ask Luke); without it
+they are skipped with a note. Roblox needs no auth. One brand at a time,
+the script paces itself deliberately.
 
 ## Step 2: Classify before you count
 
-Roblox search pads weak queries with popular and semantically similar
-content. For a brand with little real presence, every returned experience
-can be filler: blockbuster games with billions of visits that have nothing
-to do with the brand. The `Brand Match` column makes the first cut
-mechanical:
+The `Brand Match` column makes the first cut mechanical:
 
 - **Rows with an empty `Brand Match` are noise. They never enter any
-  figure, under any framing.** No brand term in the name or creator means
-  it is not the brand's content, however large its numbers.
-- If zero experience rows have a brand match, the finding is "no matching
-  Roblox experiences found". Report that plainly and never use the CSV's
-  visit or player totals. The collector prints a warning when this happens;
-  echo it in chat.
+  figure.** Roblox search pads weak queries with popular unrelated games;
+  a Greggs pull once returned 109 experiences, none of them Greggs.
+- **Eyeball the matched names before quoting anything.** Substring matching
+  has burned us twice: "Narutomaki Tower" (a fish-cake game, 97m visits)
+  matched Naruto, and "Target" matches every shooting game on the
+  platform. If a matched name is a longer word containing the brand, or
+  the brand word is generic, throw the row out and say so.
 
-Then put every brand-matched row in exactly one bucket before computing
-anything:
+Then classify every matched row:
 
-- **Official**: `Creator` equals the brand name, case-insensitive. Brands
-  with a real presence run verified creator accounts under their own name
-  (adidas does; most brands do not).
-- **Creator-made**: brand name appears in the item or experience `Name` but
-  the creator is someone else. Fan-made, unofficial content.
-- **Lookalike**: carries the brand's product-line names without the brand
-  word ("Samba Sneakers", "NK Dunk Low"). Usually knockoffs dodging the
-  trademark. Flag them in chat as a finding; never count them in headline
-  figures.
-- **Noise**: no brand term in name or creator (`Brand Match` empty).
-  Exclude from all figures and say in chat how many rows you dropped.
+- **Official** requires one of, in order of strength:
+  1. Creator name equals the brand exactly (case and spacing may differ,
+     punctuation may NOT: "Gregg's™", "Greggs®" and "KTM Oficial" are
+     imitators, not the brand; an invisible trailing character has been
+     used to fake this).
+  2. A punctuation variant of the name PLUS Roblox's verified badge, the
+     one signal an imitator cannot self-award.
+  3. The experience DESCRIPTION declares a brand partnership in narrow
+     terms ("official <brand>", "<brand>-sponsored", "sponsored by
+     <brand>", "in partnership with <brand>", "officially licensed"),
+     because partners run brand activations under their own accounts
+     (Formula E's official experience is run by "Formula E - Electric
+     Lap"). Any disclaimer in the description ("unofficial", "fan
+     group/made", "not affiliated") voids the claim outright.
+- **Creator-made**: brand named, creator is someone else. Fan-made,
+  unofficial. A creator named after the brand plus extra words ("KTM
+  RACING TEAM GROUP", "{UK} Greggs") is a fan group, never official.
+- **Lookalike**: product-line names without the brand word. Flag in chat,
+  never count.
 
-A creator named after the brand plus extra words ("Greggs RBLX", "{UK}
-Greggs") is a fan group, never official. Official means the creator name
-equals the brand name exactly, and the Verified Creator column supports it.
+## Step 3: Verify against the GEEIQ platform (do not skip)
 
-## Step 3: Pick the figures
+You have platform access; use it. Search the brand on
+`https://app.geeiq.com/search?q=<brand>` and open the brand page's
+**Partnerships** and **Experiences** tabs before writing a word.
 
-Compute only what the data supports. Candidates, in priority order:
+- The platform tracks partnerships the public data cannot see. A KTM
+  report nearly went out saying "no official presence" while the platform
+  tracked KTM's live Driving Empire integration. The recipient signed
+  those deals; the report must know about them.
+- Open "View table" on partnerships for the dates: a past two-week event
+  and a live integration look identical on the overview card.
+- If the platform and your collected data disagree, the platform wins for
+  partnerships and the collected data wins for marketplace counts.
 
-- Combined lifetime visits across matching experiences (usually the
-  strongest number on the page)
-- Official item count, and the official/creator-made split
-- The most visited matching experience, named, with its visit count
-- Count of distinct creators making content around the brand
-- Most favourited item, named
-- YouTube video count per platform, and combined views
+**The scope rule, absolute:** presence claims name what was searched.
+Write "no official presence on Roblox's marketplace", never "no official
+presence anywhere". Brands live in licensed console games and partner
+integrations this data cannot see, and the reader usually knows it.
 
-Pick the four to six strongest. A small number that is real beats a large
-number that needs a caveat.
+## Step 4: YouTube, handle with suspicion
 
-The data picks one of two stories, and the headline follows it:
+Two mandatory checks before any YouTube figure is used:
 
-- **Commitment story**: a meaningful official catalogue means the brand has
-  already invested. The opportunity framing is scale and measurement: they
-  are in, the question is whether it is working and what peers do better.
-- **Whitespace story**: zero official rows with creator-made content and
-  visits means players built the brand's presence for them. The opportunity
-  framing is unmet demand: the audience is already there, unsupervised.
-- If the data shows almost nothing at all, that is still a finding: say what
-  the whitespace means and lean on the market context band.
+1. **Dedupe by Video ID across the three platform CSVs.** The same video
+   surfaces in several searches; per-platform sums double-count it.
+2. **Gaming-content share.** Compute the share of deduped view volume
+   whose titles carry a gaming term (roblox, fortnite, minecraft, gaming,
+   gameplay, game, obby, tycoon, simulator, ugc, mod, server, speedrun).
+   **Below 30%, drop YouTube from the report entirely** and say why in
+   chat. Physical-product brands fail this constantly: a KTM pull was 98m
+   views of real motorbike Shorts, a Casio pull 94% watch reviews. A big
+   number that is mostly not gaming is not a gaming number.
 
-Data integrity rules, non-negotiable:
+When the figure survives, word it as "views on videos naming <brand>
+surfaced by gaming searches", never "views on gaming videos".
 
-- Never invent, extrapolate or estimate a number. Every figure traces to a
-  CSV row or arithmetic on CSV rows.
-- Only rows with a non-empty `Brand Match` may enter a figure. Zero matched
-  experiences means the story is whitespace, whatever else the CSV
-  contains.
-- Roblox results are the top ~100 by relevance, not a census. Write "we
-  found N" or "the top results include N", never "there are N".
-- Date the snapshot. Visits are lifetime; player counts are that moment.
-- Creator-made content is player-made and unofficial. Never imply the brand
-  made it, endorsed it, or is affiliated with it. "Creator-made",
-  "fan-made" and "unofficial" are the right words.
-- Round for readability (2.4m, 118k) but never round up past the data.
+## Step 5: Build the report
 
-## Step 4: Build the report
+Use the bundled **`report-template.html`** — it is the approved GEEIQ
+layout (praised by the sales team for its restraint) with brand-correct
+typography. Fill the placeholders, delete the sections the data does not
+earn, save as HTML, then print to PDF:
 
-Produce one self-contained HTML file, `GEEIQ_Opportunity_[Brand]_[YYYY-MM].html`,
-styled to print as a single A4 portrait page (use `@page` and
-`@media print` rules; the rep prints to PDF from the browser). No external
-scripts; a Google Fonts import for the two typefaces is fine, with system
-fallbacks.
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
+  --no-pdf-header-footer --print-to-pdf="GEEIQ_Opportunity_BRAND_YYYY-MM.pdf" \
+  "file://$PWD/report.html"
+```
 
-Structure, top to bottom:
+Structure the template enforces: kicker + title + one-sentence headline ·
+ONE hero figure in coral (the single strongest number) · up to three stat
+cards · an "Official activity" panel ONLY when official presence exists
+(with dates, from the platform) · "What this means", 90 words maximum ·
+a highlights panel of named items or experiences · the "What we searched"
+method strip, which must state exactly what was scanned, what matched,
+and whether YouTube was excluded · standing page 2, do not edit its
+figures.
 
-1. **Header**: GEEIQ wordmark as text, title "Brand opportunity: [Brand]",
-   snapshot date ("Snapshot: [month year]").
-2. **Headline finding**: one sentence, specific to this brand, led by the
-   strongest number.
-3. **Stat grid**: the four to six figures from step 3, each with a one-line
-   label.
-4. **Analyst reading**: two or three sentences on what the numbers say about
-   where this brand already lives in gaming and virtual worlds.
-5. **The opportunity**: two or three sentences drawing the sales conclusion
-   the data supports. Whitespace story: the audience got there first and
-   nobody official is meeting them. Commitment story: presence exists, the
-   next questions are performance and what category peers are doing.
-   Ground every claim in the figures above; no promises about outcomes.
-6. **Market context band** (standing content, dark background, use these
-   figures verbatim, never edit them):
-   - "$188.8bn" / "spent on gaming globally, more than music and film combined"
-   - "500m" / "monthly players on Roblox alone"
-   - "1,011" / "brand activations we tracked in virtual worlds last year"
-   - "8 years" / "tracking this market, since 2018"
-7. **Footer**: "Built by GEEIQ. Data: GEEIQ platform and public sources,
-   [month year]." Add a note if YouTube was skipped.
+Keep it sparse. The design's power is what it leaves out: if a section is
+not earned by the data, delete it rather than pad it.
 
-Design system:
+## Data integrity rules, non-negotiable
 
-- Headings: Plus Jakarta Sans 600. Body: Figtree 400. Sentence case
-  everywhere, no all caps.
-- Purple #7C68FB is the default accent. Dark amethyst #2E204D for headings
-  and the market context band background (white numbers, #C9C0E6 labels).
-  Warm off-white #FAF7F2 page background. White cards.
-- Coral #FC4F3F on exactly one number on the page: the single takeaway
-  figure. Nowhere else.
-- Clean grid, generous margins. Restrained and confident.
+- Every figure traces to a CSV row, a platform screen, or arithmetic on
+  them. No estimates, no rounding up past the data.
+- "We found N in the top results", never "there are N". Date the snapshot.
+- Creator-made content is "fan-made" or "creator-made", never implied as
+  brand-affiliated or endorsed.
+- Both stories are real and the data picks: official presence plus a fan
+  tail is a commitment story; zero official with creator demand is a
+  whitespace story; partnerships plus an uncaptured fan tail (the KTM
+  case) is the strongest of all: proof of intent and proof of demand.
 
 ## Writing rules (hard rules, every sentence)
 
-- UK English. No em dashes anywhere: use full stops, commas or colons. No
-  exclamation marks.
+- UK English. No em dashes: full stops, commas or colons. No exclamation
+  marks. Sentence case.
 - Never use: ecosystem, intelligence platform, seamless, leverage, unlock,
-  branded activations, benchmark performance, drive ROI.
-- No "not X, it's Y", "not X, but Y", or "X aren't just A, they're B"
-  constructions in any form.
-- Say "gaming and virtual worlds". Plain language over jargon.
-- Numbers carry the argument. Adjectives do not.
+  branded activations, benchmark performance, drive ROI, metaverse.
+- No "not X, it's Y" or "not X, but Y" constructions.
+- Say "gaming and virtual worlds". Numbers carry the argument.
 
 ## Deliver
 
-In chat, after the report file:
-
-1. A three-bullet summary of the findings, including rows excluded as
-   lookalikes or noise and anything odd in the data.
-2. If the brand appears under several spellings in the CSVs, ask which is
-   canonical before building. Otherwise do not ask questions, just build.
+In chat after the report: a three-bullet summary including every row
+excluded as lookalike or noise, the YouTube gaming-share and whether the
+figure was dropped, and anything the platform showed that the public data
+missed. If the brand appears under several spellings, ask which is
+canonical before building.

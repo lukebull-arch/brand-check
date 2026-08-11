@@ -47,3 +47,18 @@ unofficial; the report never implies the brand endorsed it.
 ## Questions
 
 luke.bull@geeiq.com
+
+## v3 (11 August 2026)
+
+Significant update, replace your installed copy entirely:
+
+- New report layout, the approved GEEIQ template (bundled as
+  report-template.html) with brand-correct typography.
+- Official-presence classification hardened: imitator accounts
+  ("Gregg's™") no longer count, partner-run activations declared in
+  experience descriptions do.
+- New mandatory step: verify against the GEEIQ platform before claiming
+  anything about official presence. You need your app.geeiq.com login.
+- YouTube figures are now deduplicated and dropped entirely when the view
+  volume is mostly non-gaming content (physical-product brands, take note).
+- Presence claims are always scoped: "on Roblox", never "anywhere".
