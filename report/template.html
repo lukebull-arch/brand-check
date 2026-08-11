@@ -1,16 +1,16 @@
 <meta charset="utf-8">
 <title>Brand check: {brand}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;700&family=Plus+Jakarta+Sans:wght@700&display=swap');
   @page {{ size: A4 portrait; margin: 0; }}
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
   body {{ font-family: 'Figtree', -apple-system, sans-serif; color: #2E204D; background: #FAF7F2; }}
   .page {{ width: 210mm; height: 296mm; padding: 14mm 16mm 12mm 16mm; page-break-after: always; position: relative; background: #FAF7F2; }}
   .page:last-child {{ page-break-after: auto; }}
-  h1, h2, h3 {{ font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; }}
+  h1, h2, h3 {{ font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; }}
   .head {{ display: flex; justify-content: space-between; align-items: flex-start; min-height: 12mm; }}
   .head img {{ display: block; }}
-  .kicker {{ font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7C68FB; margin: 9mm 0 6px 0; }}
+  .kicker {{ font-family: 'Figtree', sans-serif; font-size: 10.5px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: #7C68FB; margin: 9mm 0 6px 0; }}
   h1 {{ font-size: 27px; margin: 10px 0 8px 0; }}
   .headline {{ font-size: 14.5px; line-height: 1.5; color: #4A4060; max-width: 165mm; margin-bottom: 8mm; }}
   .hero {{ background: #fff; border-left: 4px solid #FC4F3F; border-radius: 10px; padding: 14px 18px; margin-bottom: 6mm; display: flex; align-items: baseline; gap: 14px; }}
@@ -20,7 +20,7 @@
   .card {{ background: #fff; border-radius: 10px; padding: 13px 15px; }}
   .card .num {{ font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 21px; color: #7C68FB; display: block; margin-bottom: 2px; }}
   .card .lbl {{ font-size: 11px; color: #6B5F8A; line-height: 1.4; }}
-  .sec {{ font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7C68FB; margin: 0 0 5px 0; }}
+  .sec {{ font-family: 'Figtree', sans-serif; font-size: 10.5px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: #7C68FB; margin: 0 0 5px 0; }}
   .body-text {{ font-size: 12.5px; line-height: 1.55; color: #2E204D; margin-bottom: 6mm; max-width: 172mm; }}
   .cols {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 6mm; }}
   .panel {{ background: #fff; border-radius: 10px; padding: 13px 15px; }}
@@ -28,8 +28,8 @@
   .row {{ display: flex; justify-content: space-between; font-size: 11.5px; padding: 5px 0; border-bottom: 1px solid #F0EBE2; }}
   .row:last-child {{ border-bottom: none; }}
   .row .r {{ color: #6B5F8A; white-space: nowrap; padding-left: 10px; }}
-  .method {{ font-size: 10px; line-height: 1.5; color: #8C82A6; border-top: 1px solid #E7E0D6; padding-top: 8px; }}
-  .foot {{ position: absolute; bottom: 10mm; left: 16mm; right: 16mm; font-size: 9.5px; color: #8C82A6; display: flex; justify-content: space-between; }}
+  .method {{ font-size: 10px; font-weight: 300; letter-spacing: 0.5px; line-height: 1.5; color: #8C82A6; border-top: 1px solid #E7E0D6; padding-top: 8px; }}
+  .foot {{ position: absolute; bottom: 10mm; left: 16mm; right: 16mm; font-size: 9.5px; font-weight: 300; letter-spacing: 0.5px; color: #8C82A6; display: flex; justify-content: space-between; }}
   .band {{ background: #2E204D; border-radius: 12px; padding: 18px 20px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 8mm; }}
   .band .num {{ font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 19px; color: #fff; display: block; }}
   .band .lbl {{ font-size: 10px; color: #C9C0E6; line-height: 1.4; }}
@@ -38,8 +38,8 @@
   .cta {{ background: #EEEDFE; border-radius: 12px; padding: 18px 20px; margin-top: 8mm; display: flex; gap: 18px; align-items: center; }}
   .cta h3 {{ font-size: 15px; margin-bottom: 5px; }}
   .cta p {{ font-size: 12px; line-height: 1.55; color: #4A4060; margin-bottom: 12px; }}
-  .btn {{ display: inline-block; background: #7C68FB; color: #fff; font-weight: 600; font-size: 12.5px; padding: 10px 22px; border-radius: 999px; text-decoration: none; }}
-  .cta .alt {{ font-size: 11.5px; color: #7C68FB; margin-left: 12px; text-decoration: underline; }}
+  .btn {{ display: inline-block; background: #7C68FB; color: #fff; font-weight: 500; font-size: 12.5px; padding: 10px 22px; border-radius: 999px; text-decoration: none; }}
+  .cta .alt {{ font-size: 11.5px; font-weight: 400; color: #4F7EF7; margin-left: 12px; text-decoration: underline; }}
 </style>
 
 <div class="page">
