@@ -44,6 +44,17 @@ import brand_logo
 # mostly keyword collision: keep the figure for context but never let it lead.
 YT_SIGNAL_FLOOR = 0.5
 
+# Physical-product brands attract real-world videos that name the brand inside
+# gaming keyword searches (a KTM report led with 98m views of motorbike Shorts).
+# When less than this share of named view volume carries any gaming term in the
+# title, the YouTube figures are treated as contaminated and dropped from the
+# report entirely. Calibrated on real pulls: KFC 0.39, adidas 0.34 (kept);
+# Casio 0.06, KTM ~0.01 (dropped).
+YT_GAMING_FLOOR = 0.30
+_GAMING_TERMS = re.compile(
+    r"roblox|fortnite|minecraft|gaming|gameplay|\bgame\b|obby|tycoon|simulator"
+    r"|\bugc\b|creative|uefn|\bmods?\b|server|speedrun", re.I)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 COLLECTOR = os.path.join(HERE, "..", "collector", "grab.py")
 VENV = os.path.join(HERE, ".venv")
@@ -263,6 +274,7 @@ def analyse(csv_dir, brand):
     # that name the brand in the title or channel count towards the figures.
     pat = brand_pattern(brand)
     yt, yt_scanned, yt_dropped = {}, 0, []
+    seen_vids, seen_gaming = {}, {}
     for p in ("roblox", "fortnite", "minecraft"):
         rows = read_csv(os.path.join(csv_dir, f"youtube_{p}.csv"))
         if not rows:
@@ -283,6 +295,14 @@ def analyse(csv_dir, brand):
                 "top": max(named, key=lambda r: to_int(r.get("Views"))),
                 "scanned": len(rows),
             }
+            # The same video surfaces in several platform searches; totals the
+            # report quotes must count it once.
+            for r in named:
+                vid = r.get("Video ID") or r.get("URL") or r.get("Title")
+                views = to_int(r.get("Views"))
+                seen_vids[vid] = views
+                if _GAMING_TERMS.search(r.get("Title", "") or ""):
+                    seen_gaming[vid] = views
 
     return {
         "brand": brand,
@@ -313,6 +333,12 @@ def analyse(csv_dir, brand):
         if yt_scanned else 0,
         "youtube_thin": bool(yt_scanned) and (
             sum(v["videos"] for v in yt.values()) / yt_scanned) < YT_SIGNAL_FLOOR,
+        "youtube_views_dedup": sum(seen_vids.values()),
+        "youtube_videos_dedup": len(seen_vids),
+        "youtube_gaming_share": (round(sum(seen_gaming.values()) / sum(seen_vids.values()), 2)
+                                 if sum(seen_vids.values()) else None),
+        "youtube_suspect": bool(seen_vids) and (
+            sum(seen_gaming.values()) / sum(seen_vids.values())) < YT_GAMING_FLOOR,
         # Named specifics: what a brand marketer actually wants to see
         "top_games_named": [
             {"name": r["Name"], "visits": to_int(r.get("Visits")),
@@ -349,12 +375,13 @@ def candidates(a):
     if a["combined_visits"]:
         out.append({"num": fmt(a["combined_visits"]),
                     "label": f"lifetime visits across {a['brand']} experiences on Roblox"})
-    yt_views = sum(v["views"] for v in a["youtube"].values())
-    yt_videos = sum(v["videos"] for v in a["youtube"].values())
-    if yt_views:
+    # Deduped: the per-platform sums count a video once per search it surfaced in.
+    yt_views = a.get("youtube_views_dedup", 0)
+    yt_videos = a.get("youtube_videos_dedup", 0)
+    if yt_views and not a.get("youtube_suspect"):
         out.append({"num": fmt(yt_views),
                     "label": f"YouTube views on videos naming {a['brand']} "
-                             f"in gaming content"})
+                             f"surfaced by gaming searches"})
     if a["games_official"]:
         out.append({"num": str(a["games_official"]),
                     "label": f"official {a['brand']} experiences live on Roblox"})
@@ -382,7 +409,7 @@ def candidates(a):
     if a["avg_like_pct"]:
         out.append({"num": f"{a['avg_like_pct']}%",
                     "label": f"average rating across rated {a['brand']} experiences"})
-    if yt_videos:
+    if yt_videos and not a.get("youtube_suspect"):
         out.append({"num": str(yt_videos),
                     "label": f"videos naming {a['brand']} across Roblox, "
                              f"Fortnite and Minecraft searches"})
@@ -393,7 +420,12 @@ def candidates(a):
     # A hero figure that needs apologising for is not a hero figure. When most
     # scanned videos were keyword collisions, push YouTube down to context so a
     # Roblox figure leads instead.
-    if a.get("youtube_thin"):
+    if a.get("youtube_suspect"):
+        # Contaminated by real-world videos naming the brand: no YouTube figure
+        # is defensible, so none may appear anywhere in the report.
+        out = [c for c in out if "YouTube" not in c["label"]
+               and not c["label"].startswith("videos naming")]
+    elif a.get("youtube_thin"):
         yt_entries = [c for c in out if "YouTube views" in c["label"]
                       or c["label"].startswith("videos naming")]
         out = [c for c in out if c not in yt_entries]
@@ -512,6 +544,17 @@ or figures.games_official above zero), still report the creator-made footprint
 alongside it, and when the presence is entirely creator-made say no official
 presence exists. The contrast between official and player-made is the story;
 never let one side crowd the other out entirely.
+
+Scope, absolute rule: presence claims are always scoped to what was searched.
+Write "no official presence on Roblox" or "on Roblox's marketplace", never "no
+official presence anywhere" or "on any platform". Brands run activations
+through partner studios and licensed games this data cannot see, and the
+reader often knows about them.
+
+If figures.youtube_suspect is true, the YouTube data is contaminated by
+real-world videos that name the brand (product shorts, reviews): the report
+and email must not mention YouTube at all. Do not lead with it, do not cite
+it, do not allude to view counts.
 
 If figures.youtube_thin is true, the YouTube numbers are mostly keyword
 collisions rather than brand content: do not lead the headline with them, do not

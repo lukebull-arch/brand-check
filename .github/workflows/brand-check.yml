@@ -80,7 +80,8 @@ jobs:
             --first-name "${{ steps.inputs.outputs.first_name }}" \
             --hubspot-url "${{ steps.inputs.outputs.hubspot_url }}" \
             --pdf "$OUT"/GEEIQ_Brand_check_*.pdf \
-            --email-draft "$OUT/email_draft.txt"
+            --email-draft "$OUT/email_draft.txt" \
+            --summary "$OUT/analyst_summary.txt"
 
       - name: Keep artifacts for the record
         uses: actions/upload-artifact@v4

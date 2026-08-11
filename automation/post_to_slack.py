@@ -58,6 +58,58 @@ def confirm_dialog(title, text, yes):
             "deny": {"type": "plain_text", "text": "Cancel"}}
 
 
+def review_flags(summary_path, brand):
+    """The warnings a reviewer needs at decision time, from the analyst summary.
+
+    A KTM draft claimed no official presence while the GEEIQ platform tracked
+    two partnerships, and its 98m YouTube figure was real-world motorbike
+    videos. Both warnings existed in the artifact; neither reached Slack. This
+    puts them next to the Approve button.
+    """
+    lines = []
+    data = {}
+    try:
+        import re as _re
+        text = open(summary_path).read()
+        m = _re.search(r"\{.*\}", text, _re.S)
+        if m:
+            data = json.loads(m.group(0))
+    except Exception as e:
+        lines.append(f":warning: could not read analyst summary ({e}); "
+                     "review the artifact before approving.")
+
+    near = data.get("near_official_creators") or []
+    if near:
+        shown = ", ".join(f"`{n}`" for n in near[:6])
+        more = f" (+{len(near) - 6} more)" if len(near) > 6 else ""
+        lines.append(f":mag: *Accounts naming the brand, counted as fan-made:* "
+                     f"{shown}{more}. Imitators mostly, but a partner running a "
+                     "sponsored activation looks identical in the data.")
+
+    partner = data.get("official_via_partner") or []
+    if partner:
+        lines.append(":handshake: *Counted as official from the experience "
+                     "description, not the account name:* "
+                     + "; ".join(partner[:4]))
+
+    if data.get("youtube_suspect"):
+        share = data.get("youtube_gaming_share")
+        pct = f"{int(share * 100)}%" if isinstance(share, (int, float)) else "few"
+        lines.append(f":no_entry: *YouTube figures dropped from the report:* only "
+                     f"{pct} of the named view volume looks like gaming content. "
+                     "The rest is real-world videos naming the brand.")
+    elif data.get("youtube_thin"):
+        lines.append(":warning: *YouTube signal is thin:* most scanned videos "
+                     "were keyword collisions; the figure is demoted, not led with.")
+
+    q = urllib.parse.quote(brand)
+    lines.append(f":globe_with_meridians: *Before approving:* check "
+                 f"<https://app.geeiq.com/search?q={q}|the GEEIQ platform> for "
+                 "partnerships and owned experiences the public data cannot see. "
+                 "The report must not contradict the platform.")
+    return "\n".join(lines)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--brand", required=True)
@@ -66,6 +118,7 @@ def main():
     ap.add_argument("--hubspot-url", default="")
     ap.add_argument("--pdf", required=True)
     ap.add_argument("--email-draft", required=True)
+    ap.add_argument("--summary", default="", help="analyst_summary.txt path")
     args = ap.parse_args()
 
     draft = open(args.email_draft).read().strip()
@@ -94,6 +147,8 @@ def main():
             {"type": "mrkdwn", "text": f"*Brand*\n{args.brand}"},
         ]},
         {"type": "section", "text": {"type": "mrkdwn", "text": f"*Identity check*\n{domain_check}"}},
+        {"type": "section", "text": {"type": "mrkdwn",
+            "text": "*Review flags*\n" + review_flags(args.summary, args.brand)}},
         {"type": "section",
          "text": {"type": "mrkdwn",
                   "text": f"*Email that will be sent on approval:*\n```{draft[:2500]}```"}},
