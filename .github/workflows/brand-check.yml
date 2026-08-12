@@ -83,6 +83,32 @@ jobs:
             --email-draft "$OUT/email_draft.txt" \
             --summary "$OUT/analyst_summary.txt"
 
+      - name: Alert the team if the run failed
+        if: ${{ failure() && env.SLACK_READY == 'true' }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          BRAND: ${{ steps.inputs.outputs.brand }}
+          LEAD_EMAIL: ${{ steps.inputs.outputs.email }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          # A failed run must never be silent: the lead already saw the
+          # success page, so if nobody is told, the lead is simply lost.
+          import json, os, urllib.request
+          text = (":rotating_light: *Brand check FAILED*: "
+                  f"{os.environ['BRAND']!r} for {os.environ['LEAD_EMAIL'] or 'n/a'}. "
+                  "No draft was created and the lead has NOT been emailed, but they "
+                  "saw the success page. Junk brand names (URLs, gibberish) fail "
+                  f"here by design; real ones need a manual follow-up. <{os.environ['RUN_URL']}|Run log>")
+          req = urllib.request.Request(
+              "https://slack.com/api/chat.postMessage",
+              data=json.dumps({"channel": os.environ["SLACK_CHANNEL_ID"], "text": text}).encode(),
+              headers={"Authorization": "Bearer " + os.environ["SLACK_BOT_TOKEN"],
+                       "Content-Type": "application/json; charset=utf-8"})
+          print(urllib.request.urlopen(req, timeout=30).read()[:200])
+          PY
+
       - name: Keep artifacts for the record
         uses: actions/upload-artifact@v4
         with:
