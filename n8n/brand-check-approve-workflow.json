@@ -118,7 +118,8 @@
                 "property": "data"
               }
             ]
-          }
+          },
+          "bccList": "5878363@bcc.hubspot.com"
         }
       },
       "name": "Send report email",
@@ -187,7 +188,9 @@
         "subject": "Your GEEIQ brand check request",
         "emailType": "text",
         "message": "=Hi {{ $('Parse action').first().json.firstName }},\n\nThanks for requesting a brand check on {{ $('Parse action').first().json.brand }}. We build these reports for people who work at or with the brand being checked, and we could not connect your email address to {{ $('Parse action').first().json.brand }}.\n\nIf you do work with {{ $('Parse action').first().json.brand }}, reply from your work email address and we will pick it up from there.\n\nThe GEEIQ team",
-        "options": {}
+        "options": {
+          "bccList": "5878363@bcc.hubspot.com"
+        }
       },
       "name": "Send decline email",
       "type": "n8n-nodes-base.gmail",
