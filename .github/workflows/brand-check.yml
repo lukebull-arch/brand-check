@@ -60,6 +60,19 @@ jobs:
             echo "::notice::Slack secrets not set yet - report will build but not post. Download it from the run artifacts."
           fi
 
+      # Before the build, so the owner hears about it even when the report
+      # fails. A brand check from a contact sales already owns is a buying
+      # signal, and it used to reach nobody: the form is not a HubSpot form,
+      # so no HubSpot workflow enrols and #mql-leads stays silent.
+      - name: Alert the contact owner if sales already owns this lead
+        continue-on-error: true
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+        run: |
+          python3 automation/notify_owner.py \
+            --email "${{ steps.inputs.outputs.email }}" \
+            --brand "${{ steps.inputs.outputs.brand }}"
+
       - name: Collect data and build report
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
