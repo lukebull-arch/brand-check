@@ -22,7 +22,10 @@ on:
 jobs:
   report:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Marketplace pulls now run to exhaustion, and runner IPs get rate limited
+    # hard, so a big brand can take half an hour. GRAB_BUDGET_S stops the
+    # collection cleanly before this ceiling and labels the counts a floor.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -61,6 +64,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          GRAB_BUDGET_S: "2400"
         run: |
           cd report
           python3 run.py --brand "${{ steps.inputs.outputs.brand }}"

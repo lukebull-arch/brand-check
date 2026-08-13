@@ -83,9 +83,26 @@ def base_brand(brand):
     return re.sub(r"\s*official\s*$", "", b, flags=re.I).strip() or b
 
 
+_ORG_SUFFIXES = {"fc", "afc", "cf", "sc", "plc", "ag", "inc", "ltd", "llc",
+                 "gmbh", "sa", "co", "group"}
+
+
+def core_brand(brand):
+    """The brand without brackets or a company suffix: 'Chelsea (FC)' and
+    'Chelsea FC' both become 'Chelsea'. Creators name their work the way
+    people speak, so a kit is a 'Chelsea 25/26 Home Kit'. Matching only the
+    submitted string once counted 54 items where 1,047 existed."""
+    b = " ".join(re.sub(r"\s*\([^)]*\)", "", brand or "").split())
+    words = b.split()
+    if len(words) > 1 and words[-1].lower().strip(".") in _ORG_SUFFIXES:
+        b = " ".join(words[:-1])
+    return b or (brand or "").strip()
+
+
 def brand_terms(brand):
     terms = set()
-    for t in (brand.lower().strip(), base_brand(brand).lower()):
+    for t in (brand.lower().strip(), base_brand(brand).lower(),
+              core_brand(brand).lower()):
         if t:
             terms.add(t)
             if " " in t:
@@ -213,6 +230,24 @@ def analyse(csv_dir, brand):
     items = read_csv(os.path.join(csv_dir, "roblox_catalog_items.csv"))
     games = read_csv(os.path.join(csv_dir, "roblox_games.csv"))
 
+    # The collector records any ceiling it hit. A capped pull must never be
+    # written up as a census, so the fact rides through to the report.
+    notes = {}
+    notes_path = os.path.join(csv_dir, "collection_notes.json")
+    if os.path.exists(notes_path):
+        try:
+            with open(notes_path) as f:
+                notes = json.load(f)
+        except Exception as e:
+            print(f"  collection notes unreadable ({e})")
+
+    # Items that only match the short name ("Chelsea" for a "Chelsea FC"
+    # submission) are counted, because that is how fans title their work, but
+    # the ambiguity is reported rather than buried.
+    full_terms = {t for t in (brand.lower().strip(),
+                              brand.lower().strip().replace(" ", "")) if t}
+    short_only = core_brand(brand).lower() != brand.lower().strip()
+
     def is_official(creator, verified=False):
         """The brand's own account. An exact name, allowing for case and
         spacing, always counts. A punctuation variant counts only when Roblox
@@ -304,8 +339,17 @@ def analyse(csv_dir, brand):
                 if _GAMING_TERMS.search(r.get("Title", "") or ""):
                     seen_gaming[vid] = views
 
+    short_name_items = 0
+    if short_only:
+        short_name_items = sum(
+            1 for r in fan if not matches(r.get("Name", ""), full_terms))
+
     return {
         "brand": brand,
+        "items_truncated": bool(notes.get("items_truncated")),
+        "truncation_reasons": notes.get("reasons") or [],
+        "items_short_name_only": short_name_items,
+        "short_name": core_brand(brand) if short_only else "",
         "items_total": len(items),
         "items_official": len(official),
         "items_fan": len(fan),
@@ -372,6 +416,9 @@ def analyse(csv_dir, brand):
 def candidates(a):
     """Candidate stats with exact formatted values. The model may only use these."""
     out = []
+    # Marketplace counts collected up to a platform ceiling are floors, so they
+    # carry a "+" everywhere they appear. The method strip says why.
+    floor = "+" if a.get("items_truncated") else ""
     if a["combined_visits"]:
         out.append({"num": fmt(a["combined_visits"]),
                     "label": f"lifetime visits across {a['brand']} experiences on Roblox"})
@@ -392,13 +439,13 @@ def candidates(a):
         out.append({"num": str(a["games_matching"]),
                     "label": f"{a['brand']} experiences in the top Roblox search results"})
     if a["items_official"]:
-        out.append({"num": str(a["items_official"]),
+        out.append({"num": fmt(a["items_official"]) + floor,
                     "label": f"official {a['brand']} items on the marketplace"})
     if a["items_fan"]:
-        out.append({"num": str(a["items_fan"]),
+        out.append({"num": fmt(a["items_fan"]) + floor,
                     "label": f"creator-made {a['brand']} items on the marketplace"})
     if a["distinct_creators"]:
-        out.append({"num": str(a["distinct_creators"]),
+        out.append({"num": fmt(a["distinct_creators"]) + floor,
                     "label": f"different creators making {a['brand']} content"})
     if a["top_game"] and a["top_game"]["visits"]:
         out.append({"num": fmt(a["top_game"]["visits"]),
@@ -475,20 +522,25 @@ def template_copy(a, cands):
                         f"have built around it: {fmt(a['combined_visits'])} lifetime visits "
                         "across matching experiences.")
         elif a["top_item"] and a["top_item"]["favorites"]:
+            at_least = "at least " if a.get("items_truncated") else ""
             headline = (f"{a['brand']} runs an official presence on Roblox: "
-                        f"{a['items_official']} marketplace items, and the most loved "
-                        f"has {fmt(a['top_item']['favorites'])} favourites.")
+                        f"{at_least}{fmt(a['items_official'])} marketplace items, and "
+                        f"the most loved has {fmt(a['top_item']['favorites'])} "
+                        "favourites.")
         else:
+            at_least = "at least " if a.get("items_truncated") else ""
             headline = (f"{a['brand']} runs an official presence on Roblox with "
-                        f"{a['items_official']} items on the marketplace.")
+                        f"{at_least}{fmt(a['items_official'])} items on the marketplace.")
     else:
         angle = "whitespace"
         if a["combined_visits"]:
             headline = (f"We found {fmt(a['combined_visits'])} lifetime visits across "
                         f"creator-made {a['brand']} experiences on Roblox. None are official.")
         else:
-            headline = (f"We found {a['items_fan']} creator-made {a['brand']} items "
-                        "on the Roblox marketplace. None are official.")
+            at_least = "at least " if a.get("items_truncated") else ""
+            headline = (f"We found {at_least}{fmt(a['items_fan'])} creator-made "
+                        f"{a['brand']} items on the Roblox marketplace. "
+                        "None are official.")
     tg = a["top_game"]
     reading_bits = []
     if angle == "whitespace":
@@ -727,6 +779,7 @@ def main():
                    "videos_scanned": a["youtube_scanned"],
                    "videos_named": a["youtube_named"],
                    "platforms": [p.capitalize() for p in a["youtube"]],
+                   "items_truncated": a.get("items_truncated", False),
                },
                "youtube_suspect": a.get("youtube_suspect", False),
                "top_games_named": a["top_games_named"],
@@ -768,6 +821,16 @@ def main():
                     "description, not the account name (a partner studio runs "
                     "these for the brand): "
                     + json.dumps(a["official_via_partner"]))
+        if a.get("items_truncated"):
+            f.write("\n\nCOUNTS ARE A FLOOR: the collection hit a platform limit, "
+                    "so more marketplace items exist than were collected. "
+                    "Reasons: " + "; ".join(a.get("truncation_reasons") or [])
+                    + "\nThe report words these figures as 'at least N'.")
+        if a.get("items_short_name_only"):
+            f.write(f"\n\nSHORT-NAME MATCHES: {a['items_short_name_only']} matched "
+                    f"items name only \"{a.get('short_name')}\", not the full "
+                    f"submitted brand. Skim them: the short name can belong to "
+                    f"something else entirely.")
         near_list = a.get("near_official_creators") or []
         if near_list:
             shown = near_list[:12]

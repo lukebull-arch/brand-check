@@ -40,6 +40,8 @@ import urllib.parse
 import urllib.request
 
 UA = "GEEIQ brand check collector (internal tool; contact luke.bull@geeiq.com)"
+PAGE_CEILING = 40   # 40 x 30 = 1,200 rows, past Roblox's own per-query ceiling
+QUERY_CAP_HINT = 960  # a query ending at or above this almost certainly hit that cap
 PAUSE_S = 1.2
 COOKIE_PATH = os.path.expanduser("~/.config/geeiq/roblosecurity")
 YT_PLATFORMS = ["roblox", "fortnite", "minecraft"]
@@ -86,14 +88,28 @@ def _norm(s):
     return re.sub(r"\s+", "", (s or "").strip().lower())
 
 
+ORG_SUFFIXES = {"fc", "afc", "cf", "sc", "plc", "ag", "inc", "ltd", "llc",
+                "gmbh", "sa", "co", "group"}
+
+
 def brand_queries(brand):
-    """The submitted name, the base name (trailing 'official' stripped), and
-    base + 'official', deduped, base first is not required: submitted first."""
-    b = brand.strip()
-    base = re.sub(r"\s*official\s*$", "", b, flags=re.I).strip() or b
+    """Every name the brand's content actually appears under: the submitted
+    string, the same string with brackets and a company suffix removed, the
+    base name with a trailing 'official' stripped, and base + 'official'.
+
+    The bracket and suffix stripping matters as much as the pagination fix:
+    fans title a kit 'Chelsea 25/26 Home', never 'Chelsea (FC) 25/26 Home',
+    so a submitted 'Chelsea FC' that only ever queries itself misses the
+    catalogue it was sent to find."""
+    b = " ".join(brand.split())
+    plain = " ".join(re.sub(r"\s*\([^)]*\)", "", b).split()) or b
+    words = plain.split()
+    if len(words) > 1 and words[-1].lower().strip(".") in ORG_SUFFIXES:
+        plain = " ".join(words[:-1])
+    base = re.sub(r"\s*official\s*$", "", plain, flags=re.I).strip() or plain
     queries, seen = [], set()
-    for q in (b, base, f"{base} official"):
-        if q.lower() not in seen:
+    for q in (b, plain, base, f"{base} official"):
+        if q and q.lower() not in seen:
             seen.add(q.lower())
             queries.append(q)
     return base, queries
@@ -123,7 +139,7 @@ def item_row(d):
     }
 
 
-def grab_items(brand, cookie, pages, out_dir):
+def grab_items(brand, cookie, pages, out_dir, budget_s=0):
     """Marketplace items via catalog search API, across brand-name variants,
     then the full store of any official-looking creator found."""
     base, queries = brand_queries(brand)
@@ -139,22 +155,57 @@ def grab_items(brand, cookie, pages, out_dir):
             return 1
         return 0
 
+    truncated = []
+    # Exhaustive pulls plus rate-limit backoffs can outlast the CI job. Stop on
+    # a clock rather than being killed mid-run: a labelled floor still ships a
+    # report, a killed job ships nothing.
+    deadline = (time.monotonic() + budget_s) if budget_s else None
     for query in queries:
-        cursor = ""
-        for page in range(pages):
+        if deadline and time.monotonic() > deadline:
+            truncated.append(f"the '{query}' search never ran: the collection "
+                             f"time budget ran out first")
+            print(f"  WARNING: time budget spent, skipping query '{query}'")
+            continue
+        cursor, page, fetched = "", 0, 0
+        while True:
+            page += 1
             q = urllib.parse.urlencode({"Keyword": query, "Limit": 30, "Cursor": cursor})
             try:
                 data = http_json(f"https://catalog.roblox.com/v1/search/items/details?{q}", cookie)
             except Exception as e:
-                print(f"  items '{query}' page {page + 1} failed ({e}); keeping {len(rows)} rows collected so far")
+                print(f"  items '{query}' page {page} failed ({e}); keeping {len(rows)} rows collected so far")
+                truncated.append(f"the '{query}' search stopped early on an API error")
                 break
             batch = data.get("data") or []
             added = sum(add(d) for d in batch)
+            fetched += len(batch)
             cursor = data.get("nextPageCursor")
-            print(f"  items '{query}' page {page + 1}: {len(batch)} rows ({added} new)")
+            print(f"  items '{query}' page {page}: {len(batch)} rows ({added} new, {len(rows)} total)")
             if not cursor or not batch:
                 break
+            if pages and page >= pages:
+                truncated.append(f"the '{query}' search stopped at the {pages}-page limit "
+                                 f"with more results available")
+                print(f"  WARNING: '{query}' stopped at the --pages limit ({pages}) with a "
+                      f"live cursor. Counts are a truncated sample, not a total.")
+                break
+            if page >= PAGE_CEILING:
+                truncated.append(f"the '{query}' search stopped at the {PAGE_CEILING}-page "
+                                 f"safety ceiling with more results available")
+                print(f"  WARNING: '{query}' hit the {PAGE_CEILING}-page ceiling with a live cursor.")
+                break
+            if deadline and time.monotonic() > deadline:
+                truncated.append(f"the '{query}' search stopped after {page} pages: the "
+                                 f"collection time budget ran out with more results available")
+                print(f"  WARNING: time budget spent mid-'{query}' at page {page}. "
+                      f"Counts are a floor.")
+                break
             time.sleep(PAUSE_S)
+        if fetched >= QUERY_CAP_HINT:
+            truncated.append(f"the '{query}' search reached Roblox's ~1,000-row limit for a "
+                             f"single query, so more items exist than were collected")
+            print(f"  NOTE: '{query}' returned {fetched} rows, Roblox's ~1,000-row cap for one "
+                  f"query. Treat the item count as a floor.")
         time.sleep(PAUSE_S)
 
     # Official creators found in the results: pull their whole store so
@@ -168,14 +219,15 @@ def grab_items(brand, cookie, pages, out_dir):
                 officials.append({"id": key, "type": r["Creator Type"], "name": r["Creator"]})
     for off in officials[:3]:
         ct = 2 if str(off["type"]).lower() == "group" else 1
-        cursor, got = "", 0
-        for page in range(pages):
+        cursor, got, page = "", 0, 0
+        while page < PAGE_CEILING:
+            page += 1
             q = urllib.parse.urlencode({"CreatorTargetId": off["id"], "CreatorType": ct,
                                         "Limit": 30, "Cursor": cursor})
             try:
                 data = http_json(f"https://catalog.roblox.com/v1/search/items/details?{q}", cookie)
             except Exception as e:
-                print(f"  store of {off['name']} page {page + 1} failed ({e}); continuing")
+                print(f"  store of {off['name']} page {page} failed ({e}); continuing")
                 break
             batch = data.get("data") or []
             got += sum(add(d) for d in batch)
@@ -188,7 +240,7 @@ def grab_items(brand, cookie, pages, out_dir):
 
     path = os.path.join(out_dir, "roblox_catalog_items.csv")
     write_csv(path, rows)
-    return len(rows), officials
+    return len(rows), officials, truncated
 
 
 def game_row_from_search(g):
@@ -389,7 +441,15 @@ def main():
     ap = argparse.ArgumentParser(description="GEEIQ brand check collector")
     ap.add_argument("--brand", required=True)
     ap.add_argument("--out", default=None, help="output dir (default ./out/<brand>)")
-    ap.add_argument("--pages", type=int, default=5, help="max pages per Roblox source")
+    ap.add_argument("--pages", type=int, default=0,
+                    help="cap on marketplace pages per query (default 0: keep "
+                         "paginating until Roblox stops returning a cursor)")
+    ap.add_argument("--game-pages", type=int, default=10,
+                    help="max experience-search pages per query")
+    ap.add_argument("--budget-seconds", type=int, default=int(os.environ.get("GRAB_BUDGET_S", "0")),
+                    help="wall-clock budget for the marketplace pull (0: no "
+                         "limit). On timeout it stops cleanly and records the "
+                         "counts as a floor instead of being killed.")
     ap.add_argument("--no-auth", action="store_true", help="skip the Roblox cookie (returns empty results; for testing)")
     args = ap.parse_args()
 
@@ -404,10 +464,11 @@ def main():
               "~/.config/geeiq/roblosecurity and rerun.")
 
     print(f"Collecting for brand: {args.brand} -> {out_dir}")
-    n_items, officials = grab_items(args.brand, cookie, args.pages, out_dir)
+    n_items, officials, truncated = grab_items(args.brand, cookie, args.pages, out_dir,
+                                               args.budget_seconds)
     if officials:
         print(f"  official creators found: {', '.join(o['name'] for o in officials)}")
-    n_games = grab_games(args.brand, cookie, args.pages, out_dir, officials)
+    n_games = grab_games(args.brand, cookie, args.game_pages, out_dir, officials)
 
     yt_key = os.environ.get("YOUTUBE_API_KEY")
     n_videos = 0
@@ -416,7 +477,18 @@ def main():
     else:
         print("NOTE: YOUTUBE_API_KEY not set, skipping YouTube CSVs.")
 
+    # Hand the ceilings downstream. A truncated pull that reads as a finished
+    # report is the failure this file exists to prevent, so the fact travels
+    # with the data rather than living only in this log.
+    with open(os.path.join(out_dir, "collection_notes.json"), "w") as f:
+        json.dump({"items_truncated": bool(truncated), "reasons": truncated,
+                   "items": n_items, "games": n_games, "videos": n_videos}, f, indent=2)
+
     print(f"Done. items={n_items} games={n_games} videos={n_videos}")
+    if truncated:
+        print("ITEM COUNT IS A FLOOR, not a total:")
+        for reason in truncated:
+            print(f"  - {reason}")
     if n_items == 0 and n_games == 0:
         print("Both Roblox sources came back empty. That usually means the "
               "cookie is missing or expired, so refresh it and rerun.")

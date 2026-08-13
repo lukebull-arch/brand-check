@@ -17,8 +17,20 @@ claim must survive them knowing their own deals better than you do.
 python3 scripts/grab.py --brand "BRAND NAME"
 ```
 
-Outputs land in `out/<brand>/` (override with `--out DIR`; `--pages N`
-raises the Roblox page count, default 5):
+**Let it run to the end and never pass `--pages`.** The collector now
+paginates the marketplace until Roblox stops returning a cursor, which on a
+big brand means several minutes and dozens of pages. `--pages N` exists only
+as a deliberate sample and it will print a truncation warning; a report built
+on a truncated pull is wrong, not approximate. A Chelsea FC check went out
+with 54 fan-made items when the catalogue held 1,047: the collector had
+stopped at page 5 with a live cursor and said nothing.
+
+**Brand name: type it the way fans type it.** Give the plain trading name
+("Chelsea", "KTM", "Greggs"). The script also strips brackets and org
+suffixes itself, so "Chelsea (FC)" is queried as both "Chelsea (FC)" and
+"Chelsea", but a name nobody uses in an item title finds nothing.
+
+Outputs land in `out/<brand>/` (override with `--out DIR`):
 
 | File | Contents |
 |---|---|
@@ -30,6 +42,22 @@ Environment: `YOUTUBE_API_KEY` for the YouTube CSVs (ask Luke); without it
 they are skipped with a note. Roblox needs no auth. One brand at a time,
 the script paces itself deliberately.
 
+### What the collector cannot see, and what you must write instead
+
+Read the run's final line and every WARNING or NOTE above it. Three ceilings
+exist and each one changes the wording of the report:
+
+| Ceiling | What the run prints | How you must word it |
+|---|---|---|
+| Roblox caps a single catalogue query at about 1,000 rows | `NOTE: "X" returned N rows, which is Roblox's ~1,000-row ceiling` | "at least N items", plus a method-strip line saying the platform's search limit was reached |
+| `--pages` or the 40-page safety ceiling stopped a live cursor | `WARNING: stopped at ... more results still available` | Do not publish. Rerun without the limit |
+| YouTube search is relevance-ranked, never exhaustive | `youtube <platform>: N rows (top sample, not a census)` | "at least N views across the top results", never a total |
+
+If the summary line says `items=N (AT LEAST ...)`, the phrase "at least"
+belongs in the report itself, in the hero figure's caption and the method
+strip. A floor honestly labelled is a stronger sales number than a total that
+the recipient can disprove by scrolling their own catalogue.
+
 ## Step 2: Classify before you count
 
 The `Brand Match` column makes the first cut mechanical:
@@ -37,6 +65,12 @@ The `Brand Match` column makes the first cut mechanical:
 - **Rows with an empty `Brand Match` are noise. They never enter any
   figure.** Roblox search pads weak queries with popular unrelated games;
   a Greggs pull once returned 109 experiences, none of them Greggs.
+- **A tiny matched count on a famous brand is a bug until proven otherwise.**
+  Before quoting a low number, check the run log: did a query stop early, and
+  is the brand's own name in `Brand Match` at all? Fifty-four items for a
+  Premier League club was the tell that pagination had truncated, and it read
+  as a finished report. Sanity-check the scale against what the brand's fans
+  plainly produce.
 - **Eyeball the matched names before quoting anything.** Substring matching
   has burned us twice: "Narutomaki Tower" (a fish-cake game, 97m visits)
   matched Naruto, and "Target" matches every shooting game on the
@@ -65,6 +99,12 @@ Then classify every matched row:
 - **Lookalike**: product-line names without the brand word. Flag in chat,
   never count.
 
+If the run prints `NOTE: N of M matches name only "X"`, those rows matched on
+the short trading name alone. Keep them, because that is how fans title their
+work, but read a sample first: "Chelsea" is also a person and a London
+borough. If a meaningful share is clearly something else, say so in chat and
+in the method strip rather than quietly inflating the count.
+
 ## Step 3: Verify against the GEEIQ platform (do not skip)
 
 You have platform access; use it. Search the brand on
@@ -79,6 +119,27 @@ You have platform access; use it. Search the brand on
   and a live integration look identical on the overview card.
 - If the platform and your collected data disagree, the platform wins for
   partnerships and the collected data wins for marketplace counts.
+
+## Step 3b: Search the web before you claim absence (do not skip)
+
+Run a real web search. Partnerships are announced, and the announcement
+almost always sits on the partner studio's site rather than the brand's:
+
+- `<brand> Roblox partnership`, `<brand> Fortnite`, `<brand> game partnership`
+- the studio's newsroom once you know who built it (voldex.com/news, for one)
+- the experience's own social account, which posts the update
+
+An Aston Martin check reported nothing at all while Voldex had announced ten
+licensed Aston Martin cars in Driving Empire, live since 6 September 2025, in
+an experience with 3.2bn lifetime visits. The experience was called "[ASTON
+MARTIN] Driving Empire" at the time. One search would have found it, and the
+same was true of KTM. The platform APIs cannot see inside an experience, so
+licensed vehicles, wearables and events are invisible to every figure the
+collector produces.
+
+Anything you find this way is quotable when it comes from the studio or the
+brand direct, with the date and the source named. A fan wiki or an AI summary
+is a lead to chase, never a citation.
 
 **The scope rule, absolute:** presence claims name what was searched.
 Write "no official presence on Roblox's marketplace", never "no official
@@ -132,6 +193,9 @@ not earned by the data, delete it rather than pad it.
 - Every figure traces to a CSV row, a platform screen, or arithmetic on
   them. No estimates, no rounding up past the data.
 - "We found N in the top results", never "there are N". Date the snapshot.
+- Where a collection ceiling was hit, the report says so in the method strip
+  and the figure is written as a floor ("at least N"). Never let a capped
+  count be read as a census.
 - Creator-made content is "fan-made" or "creator-made", never implied as
   brand-affiliated or endorsed.
 - Both stories are real and the data picks: official presence plus a fan
@@ -153,5 +217,6 @@ not earned by the data, delete it rather than pad it.
 In chat after the report: a three-bullet summary including every row
 excluded as lookalike or noise, the YouTube gaming-share and whether the
 figure was dropped, and anything the platform showed that the public data
-missed. If the brand appears under several spellings, ask which is
-canonical before building.
+missed. State plainly whether any collection ceiling was hit and therefore
+whether the headline count is a total or a floor. If the brand appears under
+several spellings, ask which is canonical before building.

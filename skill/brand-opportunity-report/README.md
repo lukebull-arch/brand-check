@@ -39,14 +39,34 @@ print to PDF for sharing.
 ## What to trust
 
 Every number in the report traces to a row in the collected CSVs (saved in
-`out/<brand>/` next to the report, so you can check). Roblox results are the
-top ~100 by relevance, not a full census, which is why the report says "we
-found N" rather than "there are N". Creator-made content is fan-made and
-unofficial; the report never implies the brand endorsed it.
+`out/<brand>/` next to the report, so you can check). The collector now pulls
+the marketplace until Roblox stops returning results, so a big brand takes a
+few minutes and the counts are real. Where a platform limit is reached the run
+prints a warning and the report has to say "at least N". Creator-made content
+is fan-made and unofficial; the report never implies the brand endorsed it.
 
 ## Questions
 
 luke.bull@geeiq.com
+
+## v4 (13 August 2026)
+
+Replace your installed copy again. This one fixes an undercount, not a
+wording problem:
+
+- The collector paginates the marketplace to exhaustion by default. It used
+  to stop after 5 pages with more results waiting and say nothing, which
+  reported 54 fan-made Chelsea items when there were 1,047. Thanks Sam for
+  catching it.
+- `--pages` is now an opt-in sample and prints a truncation warning whenever
+  it stops early. So does the Roblox 1,000-row-per-query ceiling, which turns
+  a count into "at least N".
+- Bracketed names and org suffixes are searched both ways: "Chelsea (FC)"
+  also pulls and matches plain "Chelsea", which is how fans actually name
+  their items.
+- Experience and YouTube searches run the same variants, dedupe across them,
+  and label YouTube as a top sample rather than a census.
+- Runs take longer now. That is the fix working.
 
 ## v3 (11 August 2026)
 

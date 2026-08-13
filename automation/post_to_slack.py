@@ -78,6 +78,17 @@ def review_flags(summary_path, brand):
         lines.append(f":warning: could not read analyst summary ({e}); "
                      "review the artifact before approving.")
 
+    if data.get("items_truncated"):
+        why = "; ".join((data.get("truncation_reasons") or [])[:2])
+        lines.append(f":scissors: *Marketplace counts are a floor:* the pull hit a "
+                     f"platform limit, so more items exist than were collected. "
+                     f"{why}. The report words these as \"at least N\".")
+
+    if data.get("items_short_name_only"):
+        lines.append(f":grey_question: *{data['items_short_name_only']} matches name "
+                     f"only `{data.get('short_name')}`,* not the full brand. Worth a "
+                     "skim: the short name can belong to something else.")
+
     near = data.get("near_official_creators") or []
     if near:
         shown = ", ".join(f"`{n}`" for n in near[:6])
@@ -107,6 +118,19 @@ def review_flags(summary_path, brand):
                  f"<https://app.geeiq.com/search?q={q}|the GEEIQ platform> for "
                  "partnerships and owned experiences the public data cannot see. "
                  "The report must not contradict the platform.")
+
+    # The runner has no web access, and platform APIs cannot see inside an
+    # experience. An Aston Martin check reported nothing while Voldex had
+    # publicly announced ten licensed Aston Martin cars in Driving Empire. Ten
+    # seconds of searching here is the only guard against repeating that.
+    g = urllib.parse.quote(f"{brand} Roblox partnership")
+    g2 = urllib.parse.quote(f"{brand} Fortnite OR Minecraft game partnership")
+    lines.append(f":mag_right: *And search the web:* "
+                 f"<https://www.google.com/search?q={g}|{brand} Roblox partnership> "
+                 f"| <https://www.google.com/search?q={g2}|other platforms>. "
+                 "Licensed cars, wearables and in-game events never appear in "
+                 "the collected data. Announcements usually sit on the partner "
+                 "studio's site, not the brand's.")
     return "\n".join(lines)
 
 

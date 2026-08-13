@@ -52,10 +52,15 @@ def _file_uri(path):
 def _method_text(payload):
     c = payload.get("coverage", {})
     brand = payload["brand"]
-    bits = [f"What we searched: Roblox marketplace, {c.get('items_scanned', 0)} results scanned, "
-            f"{c.get('items_matched', 0)} matched to {brand}."]
-    bits.append(f"Roblox experience search: {c.get('games_scanned', 0)} results scanned, "
-                f"{c.get('games_matched', 0)} matched.")
+    at_least = "at least " if c.get("items_truncated") else ""
+    bits = [f"What we searched: Roblox marketplace, {at_least}{c.get('items_scanned', 0):,} "
+            f"results scanned, {at_least}{c.get('items_matched', 0):,} matched to {brand}."]
+    if c.get("items_truncated"):
+        bits.append("Roblox limits how many results one search returns, and that "
+                    "limit was reached, so the marketplace figures here are a "
+                    "floor rather than a total.")
+    bits.append(f"Roblox experience search: {c.get('games_scanned', 0):,} results scanned, "
+                f"{c.get('games_matched', 0):,} matched.")
     if c.get("videos_scanned"):
         plats = ", ".join(c.get("platforms") or [])
         if payload.get("youtube_suspect"):
