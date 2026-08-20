@@ -99,6 +99,31 @@ def core_brand(brand):
     return b or (brand or "").strip()
 
 
+# Brands whose own wordmark is lower case. Extend as they come up.
+LOWERCASE_BRANDS = {"adidas", "lululemon", "asics", "innocent", "boohoo"}
+
+
+def display_brand(brand):
+    """The brand as it should be printed. People type "shopkins" and "aston
+    martin" into the form, and a report that calls the brand "shopkins" in
+    front of its own brand team reads as carelessness. Anything the sender
+    capitalised themselves is left alone, so KFC, e.l.f. and Pizza Hut survive
+    untouched; only an all-lower-case submission gets title-cased."""
+    b = " ".join((brand or "").split())
+    if not b or any(c.isupper() for c in b):
+        return b
+    if b.lower() in LOWERCASE_BRANDS:
+        return b
+    def cap(w):
+        # Company suffixes are initialisms, not words: "chelsea fc" is
+        # "Chelsea FC", never "Chelsea Fc".
+        if w.lower() in _ORG_SUFFIXES:
+            return w.upper()
+        # Leave anything with punctuation alone: "e.l.f." is not "E.l.f.".
+        return w[0].upper() + w[1:] if w and w.isalpha() else w
+    return " ".join(cap(w) for w in b.split(" "))
+
+
 def brand_terms(brand):
     terms = set()
     for t in (brand.lower().strip(), base_brand(brand).lower(),
@@ -420,8 +445,17 @@ def candidates(a):
     # carry a "+" everywhere they appear. The method strip says why.
     floor = "+" if a.get("items_truncated") else ""
     if a["combined_visits"]:
-        out.append({"num": fmt(a["combined_visits"]),
-                    "label": f"lifetime visits across {a['brand']} experiences on Roblox"})
+        # One matching experience is not "experiences". Name it instead: a
+        # Shopkins report led with 95.4k visits "across shopkins experiences"
+        # when exactly one fan game existed.
+        top = a.get("top_game") or {}
+        if a["games_matching"] == 1 and top.get("name"):
+            visits_label = (f"lifetime visits to {top['name']}, the only "
+                            f"{a['brand']} experience we found on Roblox")
+        else:
+            visits_label = f"lifetime visits across {a['brand']} experiences on Roblox"
+        out.append({"num": fmt(a["combined_visits"]), "label": visits_label,
+                    "_small_reach": a["combined_visits"] < 1_000_000})
     # Deduped: the per-platform sums count a video once per search it surfaced in.
     yt_views = a.get("youtube_views_dedup", 0)
     yt_videos = a.get("youtube_videos_dedup", 0)
@@ -463,6 +497,13 @@ def candidates(a):
     if a["live_players"]:
         out.append({"num": fmt(a["live_players"]),
                     "label": f"players inside {a['brand']} experiences at this snapshot"})
+
+    # A visit count below a million cannot carry a page that also quotes 380m
+    # monthly Roblox players: it makes the brand look small. When the creator
+    # scene is the bigger story, that leads and the visits become context.
+    small = [c for c in out if c.pop("_small_reach", False)]
+    if small and (a["items_fan"] + a["items_official"]) >= 50:
+        out = [c for c in out if c not in small] + small
 
     # A hero figure that needs apologising for is not a hero figure. When most
     # scanned videos were keyword collisions, push YouTube down to context so a
@@ -567,9 +608,8 @@ def template_copy(a, cands):
         "one page, built by a GEEIQ analyst from our platform data.\n\n"
         f"The headline: {headline}\n\n"
         f"Numbers worth your attention:\n{bullet_lines}\n\n"
-        "The report also covers how your category shows up across Roblox, "
-        "Fortnite and other platforms, and where brands usually get their "
-        "first move wrong.\n\n"
+        "Page two is a short primer on how virtual worlds work and how brands "
+        "tend to enter them.\n\n"
         f"If you would like a walkthrough of what is in there and what it means "
         f"for {a['brand']}, reply to this email and I will set up 20 minutes.\n\n"
         "[analyst name], GEEIQ")
@@ -629,7 +669,7 @@ Also draft the delivery email as plain text with this exact structure:
   it.
 - The line "Numbers worth your attention:" then 2 or 3 bullets, each a hyphen
   and one candidate stat (num string unchanged) with a short plain label.
-- One line on what else the report covers: how their category shows up across
+- One line on what else the report covers: page two is a short primer on how
   Roblox, Fortnite and other platforms, and where brands usually get their
   first move wrong.
 - One closing line offering a 20 minute walkthrough of what it means for the
