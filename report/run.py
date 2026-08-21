@@ -755,6 +755,10 @@ def main():
     ap.add_argument("--no-llm", action="store_true", help="force template copy")
     args = ap.parse_args()
 
+    # Everything downstream prints this string, and all matching is
+    # case-insensitive, so fix the casing once here rather than per label.
+    args.brand = display_brand(args.brand)
+
     slug = re.sub(r"[^a-z0-9]+", "-", args.brand.lower()).strip("-")
     out_dir = args.out_dir or os.path.join(HERE, "out", slug)
     os.makedirs(out_dir, exist_ok=True)
