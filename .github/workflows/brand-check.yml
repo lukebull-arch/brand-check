@@ -25,7 +25,9 @@ jobs:
     # Marketplace pulls now run to exhaustion, and runner IPs get rate limited
     # hard, so a big brand can take half an hour. GRAB_BUDGET_S stops the
     # collection cleanly before this ceiling and labels the counts a floor.
-    timeout-minutes: 60
+    # Normal runs land at 45-55 min, so 60 was routinely hit under 429
+    # pressure (30 Aug run died at the ceiling with no alert).
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -101,23 +103,36 @@ jobs:
             --summary "$OUT/analyst_summary.txt"
 
       - name: Alert the team if the run failed
-        if: ${{ failure() && env.SLACK_READY == 'true' }}
+        # cancelled() covers the job timeout: GitHub cancels rather than
+        # fails a timed-out job, so a plain failure() gate stayed silent
+        # when the 30 Aug run hit the ceiling and that lead was lost.
+        if: ${{ (failure() || cancelled()) && env.SLACK_READY == 'true' }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           BRAND: ${{ steps.inputs.outputs.brand }}
           LEAD_EMAIL: ${{ steps.inputs.outputs.email }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
         run: |
           python3 - <<'PY'
           # A failed run must never be silent: the lead already saw the
           # success page, so if nobody is told, the lead is simply lost.
           import json, os, urllib.request
+          if os.environ["JOB_STATUS"] == "cancelled":
+              why = ("The run was cancelled, most likely the job timeout. "
+                     "Rerun it from the Actions tab; if it keeps timing out, "
+                     "build the report manually.")
+          else:
+              why = ("Junk brand names (URLs, gibberish) fail here by design, "
+                     "BUT Roblox also returns zero catalog results for some "
+                     "protected real brands (Nike, Aston Martin, Rolls Royce). "
+                     "If the brand is real, check the run log for 'items ... 0 rows' "
+                     "and build the report manually.")
           text = (":rotating_light: *Brand check FAILED*: "
                   f"{os.environ['BRAND']!r} for {os.environ['LEAD_EMAIL'] or 'n/a'}. "
                   "No draft was created and the lead has NOT been emailed, but they "
-                  "saw the success page. Junk brand names (URLs, gibberish) fail "
-                  f"here by design; real ones need a manual follow-up. <{os.environ['RUN_URL']}|Run log>")
+                  f"saw the success page. {why} <{os.environ['RUN_URL']}|Run log>")
           req = urllib.request.Request(
               "https://slack.com/api/chat.postMessage",
               data=json.dumps({"channel": os.environ["SLACK_CHANNEL_ID"], "text": text}).encode(),
