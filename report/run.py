@@ -76,6 +76,92 @@ def ensure_reportlab():
 
 
 # ---------- classification and figures ----------
+
+# Creators decorate marketplace names with emoji ("⭐Aston Villa Flag⭐",
+# "We love shopping in Lidl ☁️✨😂"). Chrome renders those through Apple Color
+# Emoji as a Type 3 bitmap font, which a commercial printer will either reject
+# or reproduce badly, so they are stripped from anything the report displays.
+# Only the printed string changes; the collected data keeps the original name.
+_EMOJI = re.compile(
+    "[" 
+    "\U0001F000-\U0001FAFF"   # pictographs, emoticons, symbols, supplements
+    "\U00002600-\U000027BF"   # misc symbols and dingbats
+    "\U0001F1E6-\U0001F1FF"   # regional indicators
+    "\U00002190-\U000021FF"   # arrows
+    "\U00002B00-\U00002BFF"   # misc symbols and arrows
+    "\U0000FE00-\U0000FE0F"   # variation selectors
+    "\U0001F3FB-\U0001F3FF"   # skin tone modifiers
+    "\U000020E3\U000020E0"    # combining enclosing marks
+    "\U0000200D"               # zero-width joiner, invisible
+    "\U000000B0"               # degree sign, used decoratively in item names
+    "\U00002700-\U000027BF"   # dingbats, decorative stars
+    "\U00002460-\U000024FF"   # enclosed alphanumerics
+    "\U00003000-\U0000303F"   # CJK punctuation used as decoration
+    "\U0000FF00-\U0000FFEF"   # fullwidth forms
+    "]+")
+# NOTE: tm and (r) are deliberately NOT stripped. They print fine in Figtree,
+# and an imitator account called "Tesco(tm)" must not be displayed as "Tesco":
+# that is the impersonator-as-official trap, in the copy rather than the data.
+
+
+# The report embeds Figtree and Plus Jakarta Sans, which cover Latin only. Any
+# other script has no glyph and prints as a hollow box: creator names carry
+# Thai, Cyrillic, CJK and invisible padding like U+115F HANGUL CHOSEONG FILLER,
+# which is what put "KAPPO[]" in a draft. Whitelisting what the fonts can
+# actually draw is the only reliable guard, since a blocklist never ends.
+_PRINTABLE = re.compile(
+    r"[^"
+    r"\u0020-\u007E"          # ASCII
+    r"\u00A0-\u024F"          # Latin-1 Supplement, Latin Extended-A and B
+    r"\u0300-\u036F"          # combining diacriticals, they sit over Latin
+    r"\u2018\u2019\u201C\u201D"  # curly quotes
+    r"\u2013\u2014\u2026\u00B7"  # en/em dash, ellipsis, middot
+    r"\u2122\u00AE\u00A9"        # tm, (r), (c)
+    r"\u00A3\u20AC\u0024"        # currency
+    r"]")
+
+
+def strip_emoji(text):
+    """The name as it should appear in print: only glyphs the fonts can draw.
+
+    Emoji and decoration go first, then anything outside the embedded Latin
+    coverage. If a name is nothing but unrenderable characters the original is
+    returned, so a row never silently becomes blank.
+    """
+    if not text:
+        return ""
+    cleaned = _PRINTABLE.sub(" ", _EMOJI.sub(" ", str(text)))
+    out = " ".join(cleaned.split()).strip(" -|\u00b7,.:;~*")
+    # Never fall back to the raw string. A name written entirely in Cyrillic,
+    # Thai or emoji has nothing the fonts can draw, and returning the original
+    # is how a hollow box reaches the page. A couple of surviving letters is
+    # also not a name ("(F)(L)(Y)(I)(N)(G) (C)(A)(T)" reduces to two), so such
+    # rows are dropped by the callers instead of printed as a fragment.
+    if sum(c.isascii() and c.isalnum() for c in out) < 2:
+        return ""
+    return out
+
+
+def print_safe(rows, *keys):
+    """Rows with display fields cleaned for print, dropping the unprintable.
+
+    A row whose first named field cannot be rendered is omitted rather than
+    shown as a box or a two-letter fragment. Omitting is safe here: these
+    panels are illustrative, and the counts they sit under come from the full
+    data, not from the rows displayed.
+    """
+    out = []
+    for r in rows or []:
+        c = dict(r)
+        for k in keys:
+            if c.get(k):
+                c[k] = strip_emoji(c[k])
+        if keys and not c.get(keys[0]):
+            continue
+        out.append(c)
+    return out
+
+
 def base_brand(brand):
     """The brand with a trailing 'official' stripped: submissions and account
     names use it interchangeably ('Pizza Hut' vs 'Pizza Hut Official')."""
@@ -132,7 +218,54 @@ def brand_terms(brand):
             terms.add(t)
             if " " in t:
                 terms.add(t.replace(" ", ""))
+    # Fans drop the apostrophe: "McDonalds" and "Dominos" outnumber the
+    # punctuated forms, and a McDonald's probe matched 0 of 30 rows until this
+    # variant existed. Possessive-only strip, so imitator punctuation like
+    # "Gregg's TM" in CREATOR names stays significant (that guard is _norm,
+    # not this).
+    for t in list(terms):
+        bare = t.replace("'", "")
+        if bare != t:
+            terms.add(bare)
+    # Accents go the same way: fans write "Nestle", the sheet says "Nestlé".
+    import unicodedata
+    for t in list(terms):
+        flat = unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode()
+        if flat and flat != t:
+            terms.add(flat)
     return terms
+
+
+
+# Vocabulary that makes an ambiguous lead word unmistakably the brand. Fans
+# write "Brighton Home Kit 22-23, #22 Kaoru Mitoma", never the registered name,
+# so a club whose full name never appears is undercounted: a 3-token rule found
+# 79 Brighton items where roughly 180 exist. The lead word alone is not enough
+# ("brighton beach", "MTA NYC Subway : Brighton Line" are not the club), so it
+# only counts alongside a word from the brand's own domain.
+_KIT_WORDS = set("""kit kits shirt jersey strip shorts sock socks home away third
+gk goalkeeper keeper training prematch anthem retro replica badge crest scarf
+fc afc cfc utd united city town albion rovers wanderers hotspur
+premier league championship efl ucl uefa fa cup""".split())
+
+_SEASON = re.compile(r"\b(?:19|20)\d{2}\b|\b\d{2}\s*[/-]\s*\d{2}\b")
+
+
+def lead_word_match(name, lead, domain_words):
+    """True when an ambiguous lead word is qualified by domain vocabulary.
+
+    Counted separately from full-name matches and reported as such, because
+    the qualifier makes it probable, not certain.
+    """
+    if not lead:
+        return False
+    n = (name or "").lower()
+    if lead not in n:
+        return False
+    toks = {t for t in re.split(r"[^a-z0-9]+", n) if t}
+    if toks & domain_words:
+        return True
+    return bool(_SEASON.search(n))
 
 
 def _norm(s):
@@ -180,7 +313,11 @@ def sanctioned_pattern(brand):
         rf"sponsored\s+by\s+{b}\b",
         rf"in\s+partnership\s+with\s+{b}\b",
         rf"official\s+partner\s+of\s+{b}\b",
-        rf"\bofficially\s+licensed\b",
+        # "officially licensed" must name the brand: a Kinder run classified a
+        # 66.8m-visit dungeon RPG as Kinder's own because its description read
+        # "officially licensed by Voldex" - a studio licence, no brand at all.
+        rf"\bofficially\s+licensed\s+(?:by\s+)?{b}\b",
+        rf"\b{b}\s+officially\s+licensed\b",
     ]
     return re.compile("|".join(parts), re.I)
 
@@ -215,9 +352,32 @@ def brand_pattern(brand):
                       re.IGNORECASE)
 
 
+_TERM_RE_CACHE = {}
+
+
 def matches(text, terms):
+    """Whole-word brand match.
+
+    A plain substring test reads "aldi" inside "Maldivian Hotel and Resort"
+    (17.5m visits), "SubterBaldi" and "Raldi's CrackHouse", which together put
+    a false 20m-visit headline on an Aldi report. Short brand names are inside
+    ordinary words often enough that the boundary is not optional. Matching is
+    deliberately conservative: the report already words counts as "at least".
+    """
     t = (text or "").lower()
-    return any(term in t for term in terms)
+    if not t:
+        return False
+    for term in terms:
+        if not term:
+            continue
+        rx = _TERM_RE_CACHE.get(term)
+        if rx is None:
+            rx = re.compile(r"(?<![a-z0-9])" + re.escape(term)
+                            + r"(?![a-z0-9])")
+            _TERM_RE_CACHE[term] = rx
+        if rx.search(t):
+            return True
+    return False
 
 
 def read_csv(path):
@@ -246,6 +406,85 @@ def fmt(n):
     if n >= 10_000:
         return f"{n / 1000:.1f}k"
     return f"{n:,}"
+
+
+
+# Marketplace listings that stuff trending keywords around the brand word.
+# A Lidl run put "xorowhair lidl tatsumaki narcissist monterrey ymir" (22,087
+# favourites) at the top of the report: the row genuinely names the brand, so
+# Brand Match passes, but the item is UGC clothing spam and 99% of Lidl's
+# entire favourite volume came from listings like it. Counts survive this
+# (each spam row is still a real listing by a real creator); anything ranked
+# by favourites does not, so the guard only screens the ranked figures.
+_FUNCTION_WORDS = set("""a an the and or but if of in on at to for from with by
+is are was were be been am do does did my your our their his her its i you he she
+it we they me him us them this that these those not no nor so as than then there
+here what which who whom whose when where why how all any both each few more most
+other some such only own same too very can will just dont don't im i'm pls please
+help lost found got get gonna wanna about after again against because before
+being below between during into out over under up down off once
+""".split())
+
+_PRODUCT_WORDS = set("""shirt tshirt tee top bottom bottoms pants trouser trousers
+jeans uniform hoodie jacket coat vest scarf hat cap beanie bag apron kit jersey
+shorts socks polo sweater sweatshirt crop skirt dress suit tie glove gloves boot
+boots shoe shoes trainers logo flag badge banner sign store shop worker retail
+employee staff cashier till trolley basket bucket clan gang card clubcard
+merch set outfit costume mask helmet backpack home away third gk goalkeeper
+ls ss alt replica training prematch anthem""".split())
+
+
+def is_keyword_soup(name, terms, extra_product_words=frozenset()):
+    """True when the brand word sits in a run of unrelated tokens.
+
+    Genuine fan items name the brand and what the thing is ("Tesco Top w/
+    Vest", "Brighton & Hove Albion Home Shorts 20 - 21"). Spam listings chain
+    unrelated fandom and celebrity tokens to catch every search at once, and
+    the brand word is just one of them. Word count alone is not the signal:
+    real kit names are long too, which is why a product word rescues a row.
+    """
+    toks = [t for t in re.split(r"[^A-Za-z0-9']+", name or "") if t]
+    if len(toks) <= 3:
+        return False
+    brand_toks = set()
+    for t in terms:
+        brand_toks.update(x.lower() for x in re.split(r"[^A-Za-z0-9']+", t) if x)
+    others = [t.lower() for t in toks if t.lower() not in brand_toks]
+    # seasons and years describe a kit, they are not stuffed keywords:
+    # "Brighton Hove Albion 2025 Ferdi Kadioglu LS" is a real shirt
+    others = [o for o in others if not o.isdigit()]
+    if not others:
+        return False
+    # any word describing an actual product means the listing is about something
+    if any(o in _PRODUCT_WORDS or o in extra_product_words for o in others):
+        return False
+    # a function word means the name reads as a phrase, not a keyword chain:
+    # "i lost my mum at tesco (pls help)" is a real meme tee, while spam is a
+    # run of bare proper nouns ("dax tenjiku chrollo yasuo lidl housemaid")
+    if any(o in _FUNCTION_WORDS for o in others):
+        return False
+    # four or more unrelated tokens, no product word, no phrasing
+    return len(others) >= 4
+
+
+# Brands whose name is also an ordinary word or a bigger fandom collide on
+# the marketplace: "kinder" is German for children and a kawaii fashion word,
+# "dominos" is a tile game and a wings accessory, "Snickers" is a streamer's
+# merch line. A fan row for these brands counts only when the listing also
+# names the product. Audited 9 Sep 2026 against the raw matches (Kinder 107
+# of 487, Domino's 45 of 342, Snickers 79 of 743); the screens below
+# reproduce those audits to within a handful of rows.
+CONTEXT_SCREENS = {
+    "kinder": ("chocolate", ["bueno", "surprise", "egg", "eggs", "chocolate", "choco", "joy",
+                             "schoko", "ferrero", "happy hippo", "hippo", "maxi", "country",
+                             "delice", "pingui", "cards", "uberraschung", "\u00fcberraschung"]),
+    "domino's": ("pizza", ["pizza", "pizzas", "delivery", "driver", "uniform", "employee",
+                           "worker", "staff", "slice", "garlic", "dominos pizza"]),
+    "dominos": ("pizza", ["pizza", "pizzas", "delivery", "driver", "uniform", "employee",
+                          "worker", "staff", "slice", "garlic", "dominos pizza"]),
+    "snickers": ("chocolate", ["bar", "chocolate", "choc", "candy", "peanut", "caramel",
+                               "nougat", "mars", "wrapper", "hungry", "satisfies", "sweet", "snack"]),
+}
 
 
 def analyse(csv_dir, brand):
@@ -285,10 +524,50 @@ def analyse(csv_dir, brand):
 
     official = [r for r in items if is_official(r["Creator"])]
     fan = [r for r in items if matches(r["Name"], terms) and not is_official(r["Creator"])]
+
+    # Long names get shortened by the people making the items. Only brands of
+    # three or more significant words qualify: a two-word brand is short enough
+    # that fans write it in full, and rescuing on its first word would drag in
+    # other brands entirely ("Aston" would collect Aston Martin).
+    _sig = [w for w in re.split(r"[^A-Za-z0-9]+", core_brand(brand) or "") if len(w) > 2]
+    lead = _sig[0].lower() if len(_sig) >= 3 else ""
+    lead_matched = []
+    if lead:
+        seen_fan = {id(r) for r in fan} | {id(r) for r in official}
+        lead_matched = [r for r in items
+                        if id(r) not in seen_fan
+                        and not is_official(r["Creator"])
+                        and lead_word_match(r.get("Name"), lead, _KIT_WORDS)]
+        fan = fan + lead_matched
+    fan_named_raw = len(fan)
+    context_label = ""
+    screen = CONTEXT_SCREENS.get(brand.lower().strip())
+    if screen:
+        context_label, ctx_terms = screen
+        fan = [r for r in fan if matches(r.get("Name"), ctx_terms)]
+        print(f"  context screen ({context_label}): {fan_named_raw} rows name {brand}, "
+              f"{len(fan)} are {context_label} products; the rest are excluded")
     noise_items = [r for r in items if r not in official and r not in fan]
     creators = sorted({r["Creator"] for r in fan if r.get("Creator")})
+    _tally = {}
+    for r in fan:
+        c = (r.get("Creator") or "").strip()
+        if c:
+            _tally[c] = _tally.get(c, 0) + 1
+    top_creators = [{"name": c, "items": n} for c, n in
+                    sorted(_tally.items(), key=lambda kv: (-kv[1], kv[0]))[:8]
+                    if n > 1]
     fav_key = lambda r: to_int(r.get("Favorites"))
-    top_item = max(official + fan, key=fav_key, default=None)
+    # Ranked-by-favourite figures must not be led by keyword-stuffing spam.
+    # For screened brands the product vocabulary is the screen itself: "Kinder
+    # Egg Surprise [Headless] - bros8000" (90 favourites) is a real item, not soup.
+    soup = [r for r in fan if is_keyword_soup(r.get("Name"), terms,
+                                              frozenset(ctx_terms) if screen else frozenset())]
+    soup_ids = {id(r) for r in soup}
+    fan_ranked = [r for r in fan if id(r) not in soup_ids]
+    soup_favs = sum(fav_key(r) for r in soup)
+    fan_favs = sum(fav_key(r) for r in fan)
+    top_item = max(official + fan_ranked, key=fav_key, default=None)
 
     # An experience is the brand's own when its creator is the brand's
     # account, whatever the experience is called (The Hut never says Pizza
@@ -319,6 +598,11 @@ def analyse(csv_dir, brand):
                    and not is_official(r.get("Creator"),
                                        verified=r.get("Verified Creator") == "yes")})
     g_match = [r for r in games if matches(r["Name"], terms) or r in g_official]
+    # Same product-context screen for experiences: "Push Dominos" (2.9m visits)
+    # is a tile game, and would otherwise head a Domino's Pizza report.
+    if screen:
+        g_match = [r for r in g_match if r in g_official
+                   or matches((r.get("Name") or "") + " " + (r.get("Description") or ""), ctx_terms)]
     noise_games = [r for r in games if r not in g_match]
     visits = sum(to_int(r.get("Visits")) for r in g_match)
     official_visits = sum(to_int(r.get("Visits")) for r in g_official)
@@ -378,6 +662,8 @@ def analyse(csv_dir, brand):
         "items_total": len(items),
         "items_official": len(official),
         "items_fan": len(fan),
+        "items_named_raw": fan_named_raw,
+        "context_label": context_label,
         "items_noise": len(noise_items),
         "distinct_creators": len(creators),
         "top_item": {"name": top_item["Name"], "favorites": to_int(top_item.get("Favorites"))} if top_item else None,
@@ -406,8 +692,14 @@ def analyse(csv_dir, brand):
         "youtube_videos_dedup": len(seen_vids),
         "youtube_gaming_share": (round(sum(seen_gaming.values()) / sum(seen_vids.values()), 2)
                                  if sum(seen_vids.values()) else None),
+        # Suspect on either of two signals. The share floor catches a feed that
+        # is mostly real-world footage. The top-video test catches a feed that
+        # clears the floor on a long tail while its single biggest video is
+        # real-world: Lidl passed at 0.39 with a 7.8m-view supermarket POV as
+        # its most watched, which would have led the report.
         "youtube_suspect": bool(seen_vids) and (
-            sum(seen_gaming.values()) / sum(seen_vids.values())) < YT_GAMING_FLOOR,
+            ((sum(seen_gaming.values()) / sum(seen_vids.values())) < YT_GAMING_FLOOR)
+            or (max(seen_vids, key=seen_vids.get) not in seen_gaming)),
         # Named specifics: what a brand marketer actually wants to see
         "top_games_named": [
             {"name": r["Name"], "visits": to_int(r.get("Visits")),
@@ -420,9 +712,17 @@ def analyse(csv_dir, brand):
             {"name": r["Name"], "favorites": to_int(r.get("Favorites")),
              "creator": r.get("Creator"), "price": r.get("Price"),
              "official": bool(is_official(r.get("Creator")))}
-            for r in sorted(official + fan, key=fav_key, reverse=True)[:3]
+            for r in sorted(official + fan_ranked, key=fav_key, reverse=True)[:3]
             if to_int(r.get("Favorites"))
         ],
+        "top_creators": top_creators,
+        "items_lead_word": len(lead_matched),
+        "lead_word": lead,
+        "items_keyword_soup": len(soup),
+        "keyword_soup_fav_share": (round(soup_favs / fan_favs, 2)
+                                   if fan_favs else 0.0),
+        "keyword_soup_examples": [
+            r["Name"] for r in sorted(soup, key=fav_key, reverse=True)[:3]],
         "platform_views": [
             {"platform": p.capitalize(), "views": v["views"], "videos": v["videos"],
              "top_video": v["top"].get("Title", "")}
@@ -484,7 +784,8 @@ def candidates(a):
     if a["top_game"] and a["top_game"]["visits"]:
         out.append({"num": fmt(a["top_game"]["visits"]),
                     "label": f"visits to the most popular {a['brand']} experience"})
-    if a["top_item"] and a["top_item"]["favorites"]:
+    favs_usable = (a.get("keyword_soup_fav_share") or 0) < 0.5
+    if a["top_item"] and a["top_item"]["favorites"] and favs_usable:
         out.append({"num": fmt(a["top_item"]["favorites"]),
                     "label": f"favourites on the most loved {a['brand']} item"})
     if a["avg_like_pct"]:
@@ -545,9 +846,31 @@ def lint(text):
     return problems
 
 
+def is_youtube_stat(stat):
+    """YouTube never leads a report.
+
+    It is the figure most easily inflated by real-world footage that merely
+    names the brand, so it can support a report but never headline one. Lidl
+    cleared the contamination floor at 0.39 and would otherwise have led with
+    29m views whose top video was a supermarket POV.
+    """
+    label = (stat.get("label") or "").lower()
+    return "video" in label or "youtube" in label
+
+
+def demote_youtube(stats):
+    """Move the first non-YouTube stat into the lead, if there is one."""
+    if len(stats) > 1 and is_youtube_stat(stats[0]):
+        i = next((n for n, st in enumerate(stats) if not is_youtube_stat(st)), None)
+        if i is not None:
+            stats.insert(0, stats.pop(i))
+    return stats
+
+
 def template_copy(a, cands):
     stats = cands[:6]
     if stats:
+        demote_youtube(stats)
         stats[0] = {**stats[0], "coral": True}
     has_official = a["items_official"] or a["games_official"]
     if has_official:
@@ -562,7 +885,8 @@ def template_copy(a, cands):
             headline = (f"{a['brand']} runs an official presence on Roblox, and players "
                         f"have built around it: {fmt(a['combined_visits'])} lifetime visits "
                         "across matching experiences.")
-        elif a["top_item"] and a["top_item"]["favorites"]:
+        elif (a["top_item"] and a["top_item"]["favorites"]
+              and (a.get("keyword_soup_fav_share") or 0) < 0.5):
             at_least = "at least " if a.get("items_truncated") else ""
             headline = (f"{a['brand']} runs an official presence on Roblox: "
                         f"{at_least}{fmt(a['items_official'])} marketplace items, and "
@@ -774,7 +1098,7 @@ def main():
 
     print("== analysing ==")
     a = analyse(csv_dir, args.brand)
-    cands = candidates(a)
+    cands = demote_youtube(candidates(a))
     if not cands:
         print("No usable figures found. Check the CSVs before building a report.")
         sys.exit(2)
@@ -824,10 +1148,18 @@ def main():
                    "videos_named": a["youtube_named"],
                    "platforms": [p.capitalize() for p in a["youtube"]],
                    "items_truncated": a.get("items_truncated", False),
+                   "items_named_raw": a.get("items_named_raw", 0),
+                   "context_label": a.get("context_label", ""),
                },
                "youtube_suspect": a.get("youtube_suspect", False),
-               "top_games_named": a["top_games_named"],
-               "top_items_named": a["top_items_named"],
+               "top_games_named": print_safe(a["top_games_named"],
+                                             "name", "creator"),
+               "top_items_named": print_safe(a["top_items_named"],
+                                             "name", "creator"),
+               "name_users": [x for x in
+                              (strip_emoji(n) for n
+                               in (a.get("near_official_creators") or [])) if x],
+               "top_creators": print_safe(a.get("top_creators"), "name"),
                "platform_views": a["platform_views"]}
 
     print("== rendering ==")
@@ -875,6 +1207,25 @@ def main():
                     f"items name only \"{a.get('short_name')}\", not the full "
                     f"submitted brand. Skim them: the short name can belong to "
                     f"something else entirely.")
+        if a.get("items_lead_word"):
+            f.write(f"\n\nSHORTENED-NAME MATCHES: {a['items_lead_word']} items do "
+                    f"not carry the full brand name but lead with "
+                    f"\"{a.get('lead_word')}\" alongside kit or season wording, so "
+                    f"they are counted. Skim them: the lead word can belong to a "
+                    f"place or another brand.")
+        soup_share = a.get("keyword_soup_fav_share") or 0
+        if a.get("items_keyword_soup"):
+            f.write(f"\n\nKEYWORD-SOUP SPAM: {a['items_keyword_soup']} matched "
+                    f"listings chain unrelated trending tokens around the brand "
+                    f"word and are excluded from the top-item and highlight "
+                    f"figures. They carry {soup_share:.0%} of all creator-made "
+                    f"favourite volume. Examples: "
+                    + json.dumps(a.get("keyword_soup_examples") or []))
+            if soup_share >= 0.5:
+                f.write(f"\n  WARNING: spam holds {soup_share:.0%} of favourite "
+                        f"volume, so DO NOT quote any favourites figure for this "
+                        f"brand. Lead on item and creator counts, which spam "
+                        f"does not distort.")
         near_list = a.get("near_official_creators") or []
         if near_list:
             shown = near_list[:12]

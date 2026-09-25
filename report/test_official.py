@@ -84,7 +84,11 @@ DESC_CASES = [
      True, "the real Formula E description, en dash and all"),
     ("Formula E", "Sponsored by Formula E. Race weekly.", True, "sponsored by"),
     ("Nike", "Built in partnership with Nike.", True, "partnership with"),
-    ("Gucci", "An officially licensed experience.", True, "officially licensed"),
+    ("Gucci", "An officially licensed Gucci experience.", True, "officially licensed naming the brand"),
+    ("Gucci", "An officially licensed experience.", False,
+     "'officially licensed' without the brand is someone else's licence"),
+    ("Kinder", "Dungeon Quest Reborn is officially licensed by Voldex.", False,
+     "the studio-licence line that put a 66.8m-visit RPG on a Kinder report"),
 
     # Fan phrasing that must not read as a brand partnership.
     ("Greggs", "Welcome to the official Greggs fan group! We are not affiliated "
