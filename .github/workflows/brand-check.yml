@@ -83,7 +83,10 @@ jobs:
           # check is skipped and the draft says so; the verified-account gate
           # still blocks absence claims.
           GEEIQ_API_TOKEN: ${{ secrets.GEEIQ_API_TOKEN }}
-          GRAB_BUDGET_S: "2400"
+          # Marketplace pull budget. The runner's IP is rate limited hard;
+          # the pull now spends this in fair shares across every query and
+          # sort, so the "official" query and the sort sweeps always run.
+          GRAB_BUDGET_S: "3600"
         run: |
           cd report
           python3 run.py --brand "${{ steps.inputs.outputs.brand }}"

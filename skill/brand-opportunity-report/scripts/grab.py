@@ -40,33 +40,102 @@ import urllib.parse
 import urllib.request
 
 UA = "GEEIQ brand check collector (internal tool; contact luke.bull@geeiq.com)"
-PAGE_CEILING = 40   # 40 x 30 = 1,200 rows, past Roblox's own per-query ceiling
+PAGE_SIZE = 120     # v1/search/items returns ids 120 at a time; details come in one POST per page
+PAGE_CEILING = 12   # 12 x 120 = 1,440 rows, past Roblox's own per-query ceiling
 QUERY_CAP_HINT = 960  # a query ending at or above this almost certainly hit that cap
 PAUSE_S = 1.2
 COOKIE_PATH = os.path.expanduser("~/.config/geeiq/roblosecurity")
 YT_PLATFORMS = ["roblox", "fortnite", "minecraft"]
 
 
-def http_json(url, cookie=None):
-    """GET with patient retries. Datacenter IPs (CI runners) get rate limited
-    aggressively, so back off exponentially and honour Retry-After."""
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
-    if cookie:
-        req.add_header("Cookie", f".ROBLOSECURITY={cookie}")
-    delay = 15
+# Adaptive pacing. A residential IP gets a 429 every hundred requests or so;
+# a GitHub runner got one on nearly every page and then sat through a
+# 15/30/60 s cascade per page (a proof run spent 2,400 s on 38 pages). The
+# cheapest request is the one not sent: after a 429 the gap between requests
+# grows and stays grown while the limiter keeps biting, and shrinks slowly
+# once requests succeed again.
+_pace = {"gap": 0.0, "last": 0.0}
+PACE_MAX = 40.0
+
+
+def _wait_turn():
+    due = _pace["last"] + _pace["gap"]
+    now = time.monotonic()
+    if due > now:
+        time.sleep(due - now)
+    _pace["last"] = time.monotonic()
+
+
+def _paced_ok():
+    _pace["gap"] = max(0.0, _pace["gap"] * 0.85) if _pace["gap"] > 1.0 else 0.0
+
+
+def _paced_limited():
+    _pace["gap"] = min(PACE_MAX, max(8.0, _pace["gap"] * 2))
+
+
+def _request(req):
+    """Send with patient retries. Honours Retry-After, backs off on 429/503,
+    and feeds the adaptive pace either way."""
+    delay = 10
     for attempt in range(6):
+        _wait_turn()
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
+                _paced_ok()
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code in (429, 503) and attempt < 5:
+                _paced_limited()
                 wait = max(delay, int(e.headers.get("Retry-After") or 0))
-                print(f"    rate limited ({e.code}), waiting {wait}s (attempt {attempt + 1}/5)...")
+                print(f"    rate limited ({e.code}), waiting {wait}s, pace now "
+                      f"{_pace['gap']:.0f}s (attempt {attempt + 1}/5)...")
                 time.sleep(wait)
-                delay = min(delay * 2, 120)
+                delay = min(delay * 2, 90)
                 continue
             raise
     return None
+
+
+def http_json(url, cookie=None):
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+    if cookie:
+        req.add_header("Cookie", f".ROBLOSECURITY={cookie}")
+    return _request(req)
+
+
+_csrf = {"token": ""}
+
+
+def http_post_json(url, body, cookie=None):
+    """POST with Roblox's CSRF handshake: the first call answers 403 with the
+    token to use, and the token is reused until it stops working."""
+    for _ in range(2):
+        req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+                                     headers={"User-Agent": UA, "Accept": "application/json",
+                                              "Content-Type": "application/json"})
+        if _csrf["token"]:
+            req.add_header("X-CSRF-TOKEN", _csrf["token"])
+        if cookie:
+            req.add_header("Cookie", f".ROBLOSECURITY={cookie}")
+        try:
+            return _request(req)
+        except urllib.error.HTTPError as e:
+            tok = e.headers.get("x-csrf-token") if e.code == 403 else None
+            if tok and tok != _csrf["token"]:
+                _csrf["token"] = tok
+                continue
+            raise
+    return None
+
+
+def item_details(ids, cookie=None):
+    """Full rows for up to 120 (id, itemType) pairs in one call."""
+    if not ids:
+        return []
+    data = http_post_json("https://catalog.roblox.com/v1/catalog/items/details",
+                          {"items": [{"itemType": t, "id": i} for i, t in ids]}, cookie)
+    return (data or {}).get("data") or []
 
 
 def load_cookie(args):
@@ -176,28 +245,40 @@ def grab_items(brand, cookie, pages, out_dir, budget_s=0):
     # Aston Villa run lifted matched items 17% over the default sort alone.
     # Each (query, sort) pair paginates to exhaustion and rows dedupe by ID.
     SORTS = ("", "1", "2", "3")
-    for query in queries:
-      for sort in SORTS:
+    plan = [(q, s) for q in queries for s in SORTS]
+    for idx, (query, sort) in enumerate(plan):
         qlabel = f"{query}" + (f" [sort {sort}]" if sort else "")
         if deadline and time.monotonic() > deadline:
             truncated.append(f"the '{qlabel}' search never ran: the collection "
                              f"time budget ran out first")
             print(f"  WARNING: time budget spent, skipping query '{qlabel}'")
             continue
+        # Fair share of what is left, so the sort sweeps and the "official"
+        # query always get their turn instead of the first query eating the
+        # whole budget. Time a query does not use rolls over to the next.
+        q_deadline = None
+        if deadline:
+            remaining_q = len(plan) - idx
+            q_deadline = time.monotonic() + (deadline - time.monotonic()) / remaining_q
         cursor, page, fetched = "", 0, 0
         while True:
             page += 1
-            params = {"Keyword": query, "Limit": 30, "Cursor": cursor}
+            # Two calls per page: 120 ids from the search index, then their
+            # details in one POST. The details-search endpoint only pages 30
+            # at a time, which cost four times the requests for the same rows.
+            params = {"Keyword": query, "Limit": PAGE_SIZE, "Cursor": cursor}
             if sort:
                 params["SortType"] = sort
             q = urllib.parse.urlencode(params)
             try:
-                data = http_json(f"https://catalog.roblox.com/v1/search/items/details?{q}", cookie)
+                data = http_json(f"https://catalog.roblox.com/v1/search/items?{q}", cookie)
+                ids = [(d.get("id"), d.get("itemType") or "Asset")
+                       for d in (data.get("data") or []) if d.get("id")]
+                batch = item_details(ids, cookie)
             except Exception as e:
                 print(f"  items '{qlabel}' page {page} failed ({e}); keeping {len(rows)} rows collected so far")
                 truncated.append(f"the '{qlabel}' search stopped early on an API error")
                 break
-            batch = data.get("data") or []
             added = sum(add(d) for d in batch)
             fetched += len(batch)
             cursor = data.get("nextPageCursor")
@@ -215,10 +296,11 @@ def grab_items(brand, cookie, pages, out_dir, budget_s=0):
                                  f"safety ceiling with more results available")
                 print(f"  WARNING: '{query}' hit the {PAGE_CEILING}-page ceiling with a live cursor.")
                 break
-            if deadline and time.monotonic() > deadline:
-                truncated.append(f"the '{query}' search stopped after {page} pages: the "
-                                 f"collection time budget ran out with more results available")
-                print(f"  WARNING: time budget spent mid-'{query}' at page {page}. "
+            if q_deadline and time.monotonic() > q_deadline:
+                truncated.append(f"the '{qlabel}' search stopped after {page} pages: its "
+                                 f"share of the collection time budget ran out with more "
+                                 f"results available")
+                print(f"  WARNING: budget share spent mid-'{qlabel}' at page {page}. "
                       f"Counts are a floor.")
                 break
             time.sleep(PAUSE_S)
