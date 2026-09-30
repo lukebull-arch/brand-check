@@ -715,8 +715,13 @@ def analyse(csv_dir, brand):
         if is_official(r.get("Creator"),
                        verified=r.get("Verified Creator") == "yes"):
             return True
-        # Run by a partner the platform or the licensee list vouches for.
-        if (r.get("Creator") or "").strip() in partner_of:
+        # Run by a partner the platform or the licensee list vouches for, and
+        # about this brand: the name or the description must say so. Cartoon
+        # Network Games runs Mr Bean's items, but Cartoon Network Game On is
+        # Cartoon Network's park, and its 71m visits are not Mr Bean's.
+        if ((r.get("Creator") or "").strip() in partner_of
+                and (matches(r.get("Name"), terms)
+                     or brand_pattern(brand).search(r.get("Description") or ""))):
             return True
         # Run by a partner, declared as the brand's in the description.
         return sanctioned_activation(brand, r.get("Description"))
@@ -1054,7 +1059,8 @@ def template_copy(a, cands):
                          if a["combined_visits"] else
                          f", alongside {at_least}{fmt(a['items_fan'])} creator-made items.")
         elif a["games_official"] and a["official_visits"]:
-            headline = (f"{a['brand']} runs an official presence on Roblox: "
+            via = f" through {partners}" if (partners and not a["items_official"]) else ""
+            headline = (f"{a['brand']} runs an official presence on Roblox{via}: "
                         f"{a['games_official']} live experience"
                         f"{'s' if a['games_official'] != 1 else ''} with "
                         f"{fmt(a['official_visits'])} lifetime visits, plus what "

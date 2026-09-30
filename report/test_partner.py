@@ -133,12 +133,20 @@ check("nothing verified: not blocked", not a["presence_claim_blocked"])
 copy = run.template_copy(a, run.demote_youtube(run.candidates(a)))
 check("plain whitespace template may say none are official", "None are official" in copy["headline"], copy["headline"])
 
-# 5. partner-run experience counts as official
+# 5. a partner-run experience is the brand's only when it names the brand.
+# Cartoon Network Game On is Cartoon Network's park: its 71m visits belong to
+# the park, not to Mr Bean, even though the same group issues Mr Bean's items.
 G = [{"Name": "Cartoon Network Game On", "Creator": "Cartoon Network Games", "Creator Type": "Group",
-      "Verified Creator": "yes", "Visits": "71341808", "Description": "Theme park tycoon"}]
+      "Verified Creator": "yes", "Visits": "71341808", "Description": "Theme park tycoon"},
+     {"Name": "Mr Bean Mini Games", "Creator": "Cartoon Network Games", "Creator Type": "Group",
+      "Verified Creator": "yes", "Visits": "5000", "Description": "Help Mr Bean find his things"}]
 a = analyse(FAN + CN, G)
-check("partner-run experience is official", a["games_official"] == 1 and a["official_visits"] == 71341808,
+check("partner's own park is not the brand's experience", a["games_official"] == 1 and a["official_visits"] == 5000,
       f"games_official={a['games_official']} visits={a['official_visits']}")
+check("partner-run experience naming the brand is official",
+      any(g["name"] == "Mr Bean Mini Games" and g["official"] for g in a["top_games_named"]))
+copy = run.template_copy(a, run.demote_youtube(run.candidates(a)))
+check("official-experience headline credits the partner", "through Cartoon Network" in copy["headline"], copy["headline"])
 
 # 6. the copy guardrails
 for text in ["Mr Bean has no official brand presence on Roblox's marketplace",
