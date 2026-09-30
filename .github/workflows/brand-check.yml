@@ -79,6 +79,10 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          # Platform session token (expires ~30 days). Without it the platform
+          # check is skipped and the draft says so; the verified-account gate
+          # still blocks absence claims.
+          GEEIQ_API_TOKEN: ${{ secrets.GEEIQ_API_TOKEN }}
           GRAB_BUDGET_S: "2400"
         run: |
           cd report

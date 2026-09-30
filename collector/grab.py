@@ -139,6 +139,10 @@ def item_row(d):
         "Creator": d.get("creatorName", ""),
         "Creator Type": d.get("creatorType", ""),
         "Creator ID": d.get("creatorTargetId", ""),
+        # Roblox's own badge. It cannot classify an account on its own (verified
+        # UGC studios make fan items too), but it is the one signal an imitator
+        # cannot award itself, so the report may not claim absence over it.
+        "Creator Verified": "yes" if d.get("creatorHasVerifiedBadge") else "",
         "Price": d.get("price", ""),
         "Favorites": d.get("favoriteCount", ""),
         "Item Type": d.get("itemType", ""),

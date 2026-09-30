@@ -1,222 +1,267 @@
 ---
 name: brand-opportunity-report
-description: Generate a GEEIQ brand opportunity report for account-based marketing. Pulls a brand's Roblox marketplace and experience data plus YouTube gaming content with the bundled collector, classifies it, and builds a client-ready report in the approved GEEIQ layout showing the brand's footprint and the opportunity in gaming and virtual worlds. Use whenever someone asks for an opportunity report, ABM report, brand check, brand visibility check, or prospect report for a brand, or asks what a brand looks like on Roblox or YouTube. Trigger even for casual phrasings like "what does Nike look like on Roblox", "run a brand check on Casio", or "build me a report for the LVMH pitch".
+description: Build a GEEIQ brand check for a sales conversation. Runs the same collector, classifier and renderer as the internal brand check pipeline (Roblox marketplace, Roblox experiences, YouTube gaming content), then applies the platform check, the web check and the house writing rules to produce a client-ready two-page PDF. Use whenever someone asks for a brand check, opportunity report, ABM report, prospect report, or what a brand looks like on Roblox, Fortnite or YouTube. Trigger on casual phrasings too: "what does Nike look like on Roblox", "run a brand check on Casio", "build me something for the LVMH pitch".
 ---
 
-# Brand opportunity report
+# Brand opportunity report (v5, 25 September 2026)
 
-Turn a brand name into a one-page opportunity report for a sales
-conversation. Four steps, always in this order: collect, classify, verify
-against the GEEIQ platform, then build. The reader is a marketer at the
-target brand, so every number must survive them checking it, and every
-claim must survive them knowing their own deals better than you do.
+This skill ships the live GEEIQ pipeline, not a copy of it. `scripts/run.py`
+collects, classifies and renders exactly as the automated brand checker does,
+with every fix made since August. Your job is what the code cannot do: the two
+checks before any presence claim, the copy, and the judgement about which
+story the data supports.
 
-## Step 1: Collect
+Four steps, in this order: **run, read the flags, check outside the data,
+write.** Skipping step three has produced three reports that told a brand it
+was absent from a platform it had launched on. Do not be the fourth.
+
+## Setup, once
+
+- Python 3 (on every Mac) and Google Chrome (the renderer prints through it).
+- Optional but worth it: `pip3 install pillow segno` gives the QR code and
+  cleaner logos. Without them the report still renders; it just has no QR.
+- `YOUTUBE_API_KEY` in your shell for the YouTube pull (ask Luke). Without it
+  the YouTube step is skipped and the report says nothing about YouTube.
+- `ANTHROPIC_API_KEY` is optional. With it, `run.py` drafts the copy itself.
+  Without it, pass `--no-llm` and the copy comes from the rule-based template,
+  which you then rewrite. Either way you edit before anything ships.
+- First run creates `scripts/.venv` with reportlab, the fallback renderer.
+  Let it.
+
+## Step 1: Run
 
 ```bash
-python3 scripts/grab.py --brand "BRAND NAME"
+python3 scripts/run.py --brand "BRAND NAME" --out-dir out/brand --no-llm
 ```
 
-**Let it run to the end and never pass `--pages`.** The collector now
-paginates the marketplace until Roblox stops returning a cursor, which on a
-big brand means several minutes and dozens of pages. `--pages N` exists only
-as a deliberate sample and it will print a truncation warning; a report built
-on a truncated pull is wrong, not approximate. A Chelsea FC check went out
-with 54 fan-made items when the catalogue held 1,047: the collector had
-stopped at page 5 with a live cursor and said nothing.
+One command does the whole pipeline: collect (marketplace across the brand
+name and its variants, four sort orders each, to exhaustion; experiences;
+YouTube on three platform searches), classify, fetch the logo, write the copy,
+render. Outputs in `out/brand/`:
 
-**Brand name: type it the way fans type it.** Give the plain trading name
-("Chelsea", "KTM", "Greggs"). The script also strips brackets and org
-suffixes itself, so "Chelsea (FC)" is queried as both "Chelsea (FC)" and
-"Chelsea", but a name nobody uses in an item title finds nothing.
-
-Outputs land in `out/<brand>/` (override with `--out DIR`):
-
-| File | Contents |
+| File | What it is |
 |---|---|
-| `roblox_catalog_items.csv` | Marketplace items: Name, ID, URL, Creator, Creator Type, Price (Robux), Favorites, Item Type, Created, Brand Match |
-| `roblox_games.csv` | Experiences: Name, ID, Universe ID, URL, Like %, Active Players, Creator, Up/Down Votes, Sponsored, Visits (lifetime), Favorites, Creator Type, Verified Creator, Description, Brand Match |
-| `youtube_<platform>.csv` | One per platform (roblox, fortnite, minecraft): Title, URL, Video ID, Creator, Creator URL, Views (numeric), Posted, Platform |
+| `GEEIQ_Brand_check_<Brand>_<YYYY-MM>.pdf` | the two-page report |
+| `report.html` | the page you edit, then re-render |
+| `analyst_summary.txt` | every figure, every flag, every sample row. Read it first |
+| `email_draft.txt` | a starting point, never sent as is |
+| `data/` | the CSVs every number traces to, plus `collection_notes.json` |
 
-Environment: `YOUTUBE_API_KEY` for the YouTube CSVs (ask Luke); without it
-they are skipped with a note. Roblox needs no auth. One brand at a time,
-the script paces itself deliberately.
+**Time.** Twenty to sixty minutes for a real brand. The collector paces
+itself and backs off on rate limits, and a run that takes an hour is the
+collector doing its job. Never run two collections at once: they starve each
+other and one silently overwrites the other's files. If a run looks dead,
+check the log before assuming; a 429 backoff sits quiet for minutes.
 
-### What the collector cannot see, and what you must write instead
+**Brand name.** Type it the way fans title their items: "Chelsea" not
+"Chelsea Football Club Ltd". The code strips brackets and org suffixes and
+searches both forms, but a name nobody uses in a listing finds nothing.
 
-Read the run's final line and every WARNING or NOTE above it. Three ceilings
-exist and each one changes the wording of the report:
+To rerun the analysis on data you already collected (after editing the
+context screen, say), pass `--csv-dir out/brand/data` and it skips collection.
 
-| Ceiling | What the run prints | How you must word it |
+## Step 2: Read the flags before you read the PDF
+
+`analyst_summary.txt` is the review. The PDF is the draft. Every line below
+has cost a real report.
+
+| Field or flag | What it means | What you do |
 |---|---|---|
-| Roblox caps a single catalogue query at about 1,000 rows | `NOTE: "X" returned N rows, which is Roblox's ~1,000-row ceiling` | "at least N items", plus a method-strip line saying the platform's search limit was reached |
-| `--pages` or the 40-page safety ceiling stopped a live cursor | `WARNING: stopped at ... more results still available` | Do not publish. Rerun without the limit |
-| YouTube search is relevance-ranked, never exhaustive | `youtube <platform>: N rows (top sample, not a census)` | "at least N views across the top results", never a total |
+| `items_official`, `items_fan`, `items_noise` | official, creator-made, and rows that matched nothing | noise never enters a figure |
+| `COUNTS ARE A FLOOR` | a query hit Roblox's 1,000-row cap per query and sort order | the report says "at least N" and the method strip says why. Already worded that way by the renderer; keep it |
+| `SHORT-NAME MATCHES` | rows that name only the trading name ("Chelsea", "Southampton") | skim them: the short name is also a person or a place. If a share is plainly something else, say so in the method strip |
+| `SHORTENED-NAME MATCHES` | rows led by the first word plus kit or season wording ("Brighton Home Kit 22-23") | fine for clubs; still skim |
+| `KEYWORD-SOUP SPAM` | listings chaining trending words around the brand ("xorowhair lidl tatsumaki") | excluded from top items already. If the WARNING says spam holds most favourite volume, quote no favourites figure at all |
+| `CHECK THESE` (near-official accounts) | accounts named like the brand but not classified official: "Gregg's", "Greggs RBLX", "{UK} Greggs" | imitators mostly, but a partner running a sponsored activation looks identical. Confirm in step 3 before the report says no official presence |
+| `Counted as official on the strength of the experience description` | partner-run experiences whose description declares the brand ("official Formula E", "sponsored by KFC") | open each one. The rule now requires the brand name next to "officially licensed", because "officially licensed by Voldex" once made a dungeon game Kinder's own. Trust but open it |
+| `youtube_suspect: true` | under 30% of named YouTube view volume carries a gaming term | YouTube is dropped from the page. Do not put it back. Physical brands fail this constantly (KTM was 98m views of real motorbikes) |
+| `youtube_thin: true` | most scanned videos never named the brand | the figure is demoted; it never leads |
+| `Logo matched entity ... <- check this is the right company` | the logo came from Wikidata or the brand's site | look at it. "John Lewis" resolved to a US congressman once, Aldi to Aldi Nord's mark, DP World Tour to a logo retired in 2022. A wrong logo on a report to the brand's own marketer ends the conversation |
+| `games_matching: 0` | no experience name matched | this is common and true for most brands. It is not a bug |
 
-If the summary line says `items=N (AT LEAST ...)`, the phrase "at least"
-belongs in the report itself, in the hero figure's caption and the method
-strip. A floor honestly labelled is a stronger sales number than a total that
-the recipient can disprove by scrolling their own catalogue.
+**Ordinary-word brands.** Kinder, Domino's, Snickers, Target: the brand word
+appears on listings that are not the product. `run.py` has a context screen
+(`CONTEXT_SCREENS`, near line 477) that counts a row only when the listing also
+names the product. If your brand is a common word and the samples look wrong,
+add an entry in the same shape as the existing ones, the lower-case brand as
+the key and a tuple of the product label and its word list as the value, then
+rerun with `--csv-dir`.
+Without it, "Push Dominos" (a tile game, 2.9m visits) led a Domino's report.
 
-## Step 2: Classify before you count
+**Zero rows for a real brand.** Roblox returns nothing for some marks in
+every phrase that contains them: Nike, Aston Martin, Rolls Royce and BMW so
+far. The run exits saying no usable figures. That is not absence. Go to the
+protected-mark section below.
 
-The `Brand Match` column makes the first cut mechanical:
+## Step 3: Check outside the data (never skip)
 
-- **Rows with an empty `Brand Match` are noise. They never enter any
-  figure.** Roblox search pads weak queries with popular unrelated games;
-  a Greggs pull once returned 109 experiences, none of them Greggs.
-- **A tiny matched count on a famous brand is a bug until proven otherwise.**
-  Before quoting a low number, check the run log: did a query stop early, and
-  is the brand's own name in `Brand Match` at all? Fifty-four items for a
-  Premier League club was the tell that pagination had truncated, and it read
-  as a finished report. Sanity-check the scale against what the brand's fans
-  plainly produce.
-- **Eyeball the matched names before quoting anything.** Substring matching
-  has burned us twice: "Narutomaki Tower" (a fish-cake game, 97m visits)
-  matched Naruto, and "Target" matches every shooting game on the
-  platform. If a matched name is a longer word containing the brand, or
-  the brand word is generic, throw the row out and say so.
+The collector sees marketplace listings and experience names. It cannot see
+licensed cars inside a driving game, a wearable drop that sold out, an event
+that ended, or a partnership announced on a studio's website. Three reports
+have nearly gone out saying "no official presence" to brands that had one:
+KTM (live Driving Empire integration), Aston Martin (ten licensed cars in a
+3bn-visit game) and True and the Rainbow Kingdom (a limited UGC capsule that
+no longer appears in search). The third one was addressed to the President of
+the studio that commissioned it.
 
-Then classify every matched row:
+**What the pipeline now does for you (v6).** `run.py` asks the platform
+itself before writing a word: it resolves the brand, pulls its partnership
+records, and looks up every Roblox-verified account that issues brand-named
+items. A verified issuer the platform (or the licensee list in `run.py`) places
+for the brand becomes "official via partner" and the copy credits it by name:
+Mr Bean's eight items by Cartoon Network Games are Mr Bean's official presence,
+not fan-made. A verified issuer nobody can place stays creator-made but blocks
+every absence claim, so the draft names the account and stops there. Set
+`GEEIQ_API_TOKEN` (your platform session token, from the MCP setup page) or
+the check is skipped and `analyst_summary.txt` says `PLATFORM CHECK: NOT DONE`.
+Read the `PLATFORM CHECK`, `OFFICIAL VIA PARTNER` and `VERIFIED, NOT PLACED`
+lines in the summary; then still do 3a and 3b by hand, because the platform
+only knows the partnerships it has logged.
 
-- **Official** requires one of, in order of strength:
-  1. Creator name equals the brand exactly (case and spacing may differ,
-     punctuation may NOT: "Gregg's™", "Greggs®" and "KTM Oficial" are
-     imitators, not the brand; an invisible trailing character has been
-     used to fake this).
-  2. A punctuation variant of the name PLUS Roblox's verified badge, the
-     one signal an imitator cannot self-award.
-  3. The experience DESCRIPTION declares a brand partnership in narrow
-     terms ("official <brand>", "<brand>-sponsored", "sponsored by
-     <brand>", "in partnership with <brand>", "officially licensed"),
-     because partners run brand activations under their own accounts
-     (Formula E's official experience is run by "Formula E - Electric
-     Lap"). Any disclaimer in the description ("unofficial", "fan
-     group/made", "not affiliated") voids the claim outright.
-- **Creator-made**: brand named, creator is someone else. Fan-made,
-  unofficial. A creator named after the brand plus extra words ("KTM
-  RACING TEAM GROUP", "{UK} Greggs") is a fan group, never official.
-- **Lookalike**: product-line names without the brand word. Flag in chat,
-  never count.
-
-If the run prints `NOTE: N of M matches name only "X"`, those rows matched on
-the short trading name alone. Keep them, because that is how fans title their
-work, but read a sample first: "Chelsea" is also a person and a London
-borough. If a meaningful share is clearly something else, say so in chat and
-in the method strip rather than quietly inflating the count.
-
-## Step 3: Verify against the GEEIQ platform (do not skip)
-
-You have platform access; use it. Search the brand on
+**3a. The GEEIQ platform.** Search the brand on
 `https://app.geeiq.com/search?q=<brand>` and open the brand page's
-**Partnerships** and **Experiences** tabs before writing a word.
+Partnerships and Experiences tabs. Open "View table" for dates: a two-week
+event and a live integration look identical on the card. If you have the
+GEEIQ MCP server configured in Claude Code, `search_entities` and
+`get_entity_snapshot` do the same from the chat. Platform beats collected data
+on partnerships; collected data beats the platform on marketplace counts.
 
-- The platform tracks partnerships the public data cannot see. A KTM
-  report nearly went out saying "no official presence" while the platform
-  tracked KTM's live Driving Empire integration. The recipient signed
-  those deals; the report must know about them.
-- Open "View table" on partnerships for the dates: a past two-week event
-  and a live integration look identical on the overview card.
-- If the platform and your collected data disagree, the platform wins for
-  partnerships and the collected data wins for marketplace counts.
+**3b. The web.** A real search, every time:
+`<brand> Roblox`, `<brand> Fortnite`, `<brand> game partnership`, then the
+partner studio's newsroom once you know who builds for them (Voldex, Gamefam,
+Dubit, Super League, Twin Atlas, Atopos). Announcements sit on the studio's
+site more often than the brand's. A studio or brand announcement with a date is
+quotable. A fan wiki, a Reddit thread or an AI summary is a lead, never a
+citation.
 
-## Step 3b: Search the web before you claim absence (do not skip)
+**3c. Limited drops leave no trace.** Roblox catalog search does not return
+items that are off sale, so a sold-out limited collection vanishes from every
+count and the brand looks absent. If the web says a drop happened, the report
+credits it and says the items are no longer listed. Never write "no presence"
+over a launch the recipient announced.
 
-Run a real web search. Partnerships are announced, and the announcement
-almost always sits on the partner studio's site rather than the brand's:
+**The scope rule, absolute.** Presence claims name what was searched: "no
+official presence on Roblox's marketplace", never "no official presence
+anywhere". Brands live in licensed console games and partner integrations
+this data cannot see, and the recipient usually signed those deals.
 
-- `<brand> Roblox partnership`, `<brand> Fortnite`, `<brand> game partnership`
-- the studio's newsroom once you know who built it (voldex.com/news, for one)
-- the experience's own social account, which posts the update
+## Protected marks: when search returns nothing
 
-An Aston Martin check reported nothing at all while Voldex had announced ten
-licensed Aston Martin cars in Driving Empire, live since 6 September 2025, in
-an experience with 3.2bn lifetime visits. The experience was called "[ASTON
-MARTIN] Driving Empire" at the time. One search would have found it, and the
-same was true of KTM. The platform APIs cannot see inside an experience, so
-licensed vehicles, wearables and events are invisible to every figure the
-collector produces.
+If `grab.py` reports `items=0 games=0` for a brand that obviously has fans,
+test one query by hand: `https://catalog.roblox.com/v1/search/items/details?Keyword=<brand>&Limit=10`.
+If `data` is empty or null while a slang term ("bimmer") returns rows, the
+mark is unsearchable. Use the workaround:
 
-Anything you find this way is quotable when it comes from the studio or the
-brand direct, with the date and the source named. A fan wiki or an AI summary
-is a lead to chase, never a citation.
+```bash
+python3 scripts/grab_hidden.py --brand BMW --alias bimmer --alias beamer \
+    --query "e30 m3" --query "m3 gtr" --out out/bmw-hidden
+```
 
-**The scope rule, absolute:** presence claims name what was searched.
-Write "no official presence on Roblox's marketplace", never "no official
-presence anywhere". Brands live in licensed console games and partner
-integrations this data cannot see, and the reader usually knows it.
+It sweeps the slang and model names fans use, the stores of the creators it
+finds (where items literally named for the brand sit, unsearchable), and the
+groups carrying the name with their public experiences. Everything it returns
+is a floor. Word it as "reachable through slang and model codes"; say the
+brand name itself returns nothing from search; do not claim to know why. The
+cause has not been established and "Roblox suppresses your trademark" is not
+a sentence to put in front of a brand's lawyers.
 
-## Step 4: YouTube, handle with suspicion
+## Step 4: Decide the story, then write
 
-Two mandatory checks before any YouTube figure is used:
+Three stories exist and the data picks:
 
-1. **Dedupe by Video ID across the three platform CSVs.** The same video
-   surfaces in several searches; per-platform sums double-count it.
-2. **Gaming-content share.** Compute the share of deduped view volume
-   whose titles carry a gaming term (roblox, fortnite, minecraft, gaming,
-   gameplay, game, obby, tycoon, simulator, ugc, mod, server, speedrun).
-   **Below 30%, drop YouTube from the report entirely** and say why in
-   chat. Physical-product brands fail this constantly: a KTM pull was 98m
-   views of real motorbike Shorts, a Casio pull 94% watch reviews. A big
-   number that is mostly not gaming is not a gaming number.
+- **Committed brand.** Official presence plus a fan tail. Lead with the
+  official figures; the fan tail is what players built around it.
+- **Whitespace with demand.** Zero official, real creator-made footprint.
+  Lead with the footprint as demand the brand does not own or measure.
+- **Whitespace without demand.** Zero official, a handful of items. The
+  brand's own zero goes in the first card, the hero is the brand's own thing
+  (a past activation, a sister brand, the category it sells into), and the
+  proof comes from verified peers in ONE supporting panel headed "Already in
+  your category". Never lead with a competitor's number: a draft that opened
+  John Lewis with Tommy Hilfiger's 63.8m visits was called an absolute mess.
 
-When the figure survives, word it as "views on videos naming <brand>
-surfaced by gaming searches", never "views on gaming videos".
+For peers, verify every figure yourself:
 
-## Step 5: Build the report
+```bash
+python3 scripts/peers.py --game "Spurs Adventure Arena" --place 9616411936 --group-name "Bloxton Hotels"
+```
 
-Use the bundled **`report-template.html`** — it is the approved GEEIQ
-layout (praised by the sales team for its restraint) with brand-correct
-typography. Fill the placeholders, delete the sections the data does not
-earn, save as HTML, then print to PDF:
+Lifetime visits belong to the experience, so attribute them to a brand only
+when the brand owns it. Group memberships are community sizes, not players.
+Figures a brand reported about itself (a Shorty entry, a LinkedIn post) are
+quotable only as "the club reports".
+
+**Framing, binding on every sentence.** The angle is proven demand the brand
+is not capturing or measuring. It is a missed opportunity, never "someone is
+using your IP". Hayley's words: the second framing gets us forwarded to legal,
+and legal do not buy analytics platforms. So:
+
+- A fan footprint is demand, not a showcase. Do not celebrate it.
+- Accounts using the name are "accounts using the name", counted plainly.
+  Never "unofficial", "imitators", "fakes" or "lookalikes" on the page.
+- Strike anything like "style themselves to look official", "could be
+  mistaken for official activity", "worth a trademark check", "taking steps
+  not to be found". The Claude copy produces these; you remove them.
+- Credit what the brand has done before you show the gap. A brand's own
+  gaming team knows its Fortnite work better than you do.
+
+**Writing rules.** UK English. No em dashes: full stops, commas or colons.
+No exclamation marks. Sentence case. Never: ecosystem, intelligence platform,
+seamless, leverage, unlock, branded activations, benchmark performance, drive
+ROI, metaverse. No "not X, it's Y" or "not X, but Y" constructions. Say
+"gaming and virtual worlds". "What this means" is four sentences, about 75
+words. Numbers carry the argument; write fewer sentences, not more.
+
+**Editing and re-rendering.** Edit `report.html` in the output folder, then:
 
 ```bash
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
-  --no-pdf-header-footer --print-to-pdf="GEEIQ_Opportunity_BRAND_YYYY-MM.pdf" \
+  --no-pdf-header-footer --print-to-pdf="GEEIQ_Brand_check_BRAND_YYYY-MM.pdf" \
   "file://$PWD/report.html"
 ```
 
-Structure the template enforces: kicker + title + one-sentence headline ·
-ONE hero figure in coral (the single strongest number) · up to three stat
-cards · an "Official activity" panel ONLY when official presence exists
-(with dates, from the platform) · "What this means", 90 words maximum ·
-a highlights panel of named items or experiences · the "What we searched"
-method strip, which must state exactly what was scanned, what matched,
-and whether YouTube was excluded · standing page 2, do not edit its
-figures.
+Page 2 is the standing primer; change only the brand name in its closing
+panel. For a one-page version (a sales call, a slide), delete the second
+`<div class="page">` block and change the footer to "Page 1 of 1".
 
-Keep it sparse. The design's power is what it leaves out: if a section is
-not earned by the data, delete it rather than pad it.
+Names and creators on the page are printed by a whitelist of what the embedded
+fonts can draw: emoji and non-Latin scripts are stripped, tm and (r) are kept
+on purpose so an imitator called "Tesco(tm)" is never shown as "Tesco". Do not
+paste raw listing names back in.
 
-## Data integrity rules, non-negotiable
+## Before it leaves you
 
-- Every figure traces to a CSV row, a platform screen, or arithmetic on
-  them. No estimates, no rounding up past the data.
-- "We found N in the top results", never "there are N". Date the snapshot.
-- Where a collection ceiling was hit, the report says so in the method strip
-  and the figure is written as a floor ("at least N"). Never let a capped
-  count be read as a census.
-- Creator-made content is "fan-made" or "creator-made", never implied as
-  brand-affiliated or endorsed.
-- Both stories are real and the data picks: official presence plus a fan
-  tail is a commitment story; zero official with creator demand is a
-  whitespace story; partnerships plus an uncaptured fan tail (the KTM
-  case) is the strongest of all: proof of intent and proof of demand.
-
-## Writing rules (hard rules, every sentence)
-
-- UK English. No em dashes: full stops, commas or colons. No exclamation
-  marks. Sentence case.
-- Never use: ecosystem, intelligence platform, seamless, leverage, unlock,
-  branded activations, benchmark performance, drive ROI, metaverse.
-- No "not X, it's Y" or "not X, but Y" constructions.
-- Say "gaming and virtual worlds". Numbers carry the argument.
+- Every figure traces to a CSV row, a platform screen, `peers.json`, or
+  arithmetic on them. Snapshot date on the page.
+- Floors are labelled "at least". Nothing capped is read as a total.
+- Page 1 content clears the footer. Open the PDF and look; the method strip
+  is the first thing to fall off the page when copy runs long.
+- The logo is the right company and the current mark.
+- Every presence claim is scoped to a platform.
+- The web check and the platform check happened, and anything they found is
+  on the page.
+- No YouTube figure appears if the summary flagged it suspect.
 
 ## Deliver
 
-In chat after the report: a three-bullet summary including every row
-excluded as lookalike or noise, the YouTube gaming-share and whether the
-figure was dropped, and anything the platform showed that the public data
-missed. State plainly whether any collection ceiling was hit and therefore
-whether the headline count is a total or a floor. If the brand appears under
-several spellings, ask which is canonical before building.
+In chat, after the PDF: three to five bullets covering what the data
+supports, every flag you acted on, the gaming share and whether YouTube was
+dropped, anything the platform or the web showed that the collector could not,
+and whether the headline count is a floor. Attach the PDF and point at
+`analyst_summary.txt`.
+
+If you send it yourself, BCC `5878363@bcc.hubspot.com` so the email lands on
+the contact's HubSpot record. Do not send a decline or a report to a contact
+someone else owns without telling them.
+
+## Known limits, say them when they bite
+
+- Roblox search caps at about 1,000 rows per query and sort order and pads
+  weak queries with popular unrelated games. Counts are floors, and rows with
+  no brand match are noise.
+- Experience search returns the top hundred or so per query, never the tail.
+- YouTube search is relevance-ranked, never a census, and the view volume on
+  physical-product brands is mostly real-world footage.
+- Nothing here sees inside an experience: licensed cars, wearables, events
+  and sponsorship placements are invisible to every figure.
+- Group memberships overlap and are not players.

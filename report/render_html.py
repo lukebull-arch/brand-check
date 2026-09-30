@@ -151,6 +151,23 @@ def _method_text(payload):
             bits.append(f"YouTube: {c.get('videos_scanned', 0)} videos scanned across {brand} "
                         f"searches on {plats}, {c.get('videos_named', 0)} named the brand and "
                         "count towards the figures above.")
+    plat = payload.get("platform_check") or {}
+    issuers = payload.get("partner_issuers") or []
+    if plat.get("checked"):
+        ent = (plat.get("brand_entity") or {}).get("title")
+        n = plat.get("brand_partnerships_2y") or 0
+        line = (f"GEEIQ platform checked {plat.get('checked_at')}: "
+                + (f"{n} {brand} partnership record{'s' if n != 1 else ''} in two years"
+                   if ent else f"{brand} is not listed as a brand under this name"))
+        if issuers:
+            line += "; " + ", ".join(
+                f"{x['creator']} issues {x['items']} of the items above and is placed as {x['brand']}"
+                for x in issuers[:2])
+        bits.append(line + ".")
+    elif issuers:
+        bits.append("Partner items: " + ", ".join(
+            f"{x['creator']} issues {x['items']} of the items above for {x['brand']}"
+            for x in issuers[:2]) + ".")
     bits.append("Everything above comes from public platform data at the snapshot date. "
                 "Creator-made content is player-made and unaffiliated with the brand. "
                 "Counts describe what we found, not platform totals.")
@@ -163,7 +180,10 @@ def _rows(entries, kind):
         name = _esc(e.get("name", ""))
         creator = _esc(e.get("creator", ""))
         left = f"{name} &middot; by {creator}" if creator else name
-        if e.get("official"):
+        if e.get("partner"):
+            left += (f" <span style=\"color:#7C68FB;font-weight:600;\">(official, via "
+                     f"{_esc(e['partner'])})</span>")
+        elif e.get("official"):
             left += " <span style=\"color:#7C68FB;font-weight:600;\">(official)</span>"
         if kind == "games":
             right = f"{_fmt(e.get('visits', 0))} visits"
@@ -308,7 +328,7 @@ def render(payload, out_path):
     if len(top_creators) >= 3:
         rows = "\n".join(
             f'      <div class="row"><span>{_esc(c["name"])}</span>'
-            f'<span>{c["items"]} items</span></div>' for c in top_creators[:6])
+            f'<span>{c["items"]} items</span></div>' for c in top_creators[:(4 if os.environ.get("BRAND_CHECK_ONE_PAGE") == "1" else 6)])
         creators_section = ('  <p class="sec">Most active creators</p>\n'
                             '  <div class="panel" style="margin-bottom:6mm;">\n'
                             + rows + "\n  </div>\n")
@@ -363,7 +383,7 @@ def render(payload, out_path):
         cards=cards,
         official_section=official_section,
         highlights_section=highlights_section,
-        names_section=names_section,
+        names_section=("" if os.environ.get("BRAND_CHECK_ONE_PAGE") == "1" else names_section),
         creators_section=creators_section,
         reading=_esc(payload.get("reading", "")),
         method=_esc(_method_text(payload)),
@@ -376,6 +396,17 @@ def render(payload, out_path):
     )
 
     filled = add_readme(filled, payload["brand"])
+
+    # One-page mode (BRAND_CHECK_ONE_PAGE=1): the BLE handout is page 1 only.
+    # Page 1 already carries the meet-report QR, so the standing intro page is
+    # dropped and the page label loses its "of 2".
+    if os.environ.get("BRAND_CHECK_ONE_PAGE") == "1":
+        first = filled.find('<div class="page">')
+        second = filled.find('<div class="page">', first + 1)
+        if second != -1:
+            tail = filled.rfind('</body>')
+            filled = filled[:second] + filled[tail:]
+        filled = filled.replace("Page 1 of 2", "")
 
     workdir = os.path.dirname(os.path.abspath(out_path)) or "."
     html_path = os.path.join(workdir, "report.html")

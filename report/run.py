@@ -36,9 +36,12 @@ import os
 import re
 import subprocess
 import sys
+import time
+import urllib.error
 import urllib.request
 
 import brand_logo
+import platform_check
 
 # If fewer than this share of scanned videos actually name the brand, YouTube is
 # mostly keyword collision: keep the figure for context but never let it lead.
@@ -131,6 +134,11 @@ def strip_emoji(text):
     if not text:
         return ""
     cleaned = _PRINTABLE.sub(" ", _EMOJI.sub(" ", str(text)))
+    # Leading and trailing bracketed tags are live-ops banners, not the name:
+    # "[SNUFFY] Blue Lock: Rivals" is Blue Lock: Rivals, "NHL Blast [BETA]" is
+    # NHL Blast. Same rule as hybrid_letter.clean_name.
+    cleaned = re.sub(r"^(\s*[\[(][^\])]*[\])]\s*)+", "", cleaned)
+    cleaned = re.sub(r"(\s*[\[(][^\])]*[\])]\s*)+$", "", cleaned)
     out = " ".join(cleaned.split()).strip(" -|\u00b7,.:;~*")
     # Never fall back to the raw string. A name written entirely in Cyrillic,
     # Thai or emoji has nothing the fonts can draw, and returning the original
@@ -474,6 +482,81 @@ def is_keyword_soup(name, terms, extra_product_words=frozenset()):
 # names the product. Audited 9 Sep 2026 against the raw matches (Kinder 107
 # of 487, Domino's 45 of 342, Snickers 79 of 743); the screens below
 # reproduce those audits to within a handful of rows.
+# Roblox groups known to issue licensed items for other companies' IP. A
+# verified badge alone cannot classify an account (verified UGC studios make
+# fan items too), so a name here, or a platform partnership record, is what
+# upgrades a verified issuer from "check this" to "official via partner".
+KNOWN_LICENSEE_GROUPS = {
+    # lower-case group name -> (brand it issues for, Roblox group id)
+    "cartoon network games": ("Cartoon Network", "5544719"),
+}
+
+
+def known_licensee(name, creator_id, verified):
+    """A known licensee matches on group id, or on name when Roblox has
+    verified the account. An unverified account merely named like one is an
+    imitator until the platform says otherwise."""
+    hit = KNOWN_LICENSEE_GROUPS.get((name or "").lower().strip())
+    if not hit:
+        return None
+    brand, gid = hit
+    if str(creator_id or "") == gid or verified:
+        return brand
+    return None
+
+
+def backfill_verified(creators, cache_path):
+    """Older CSVs carry no Creator Verified column. Ask Roblox for the badge
+    of each creator of a brand-named row, bounded and cached, so a rerun on
+    archived data gets the same gate as a fresh pull."""
+    cache = {}
+    if os.path.exists(cache_path):
+        try:
+            cache = json.load(open(cache_path))
+        except Exception:
+            cache = {}
+    asked = 0
+    # Biggest issuers first: the partner with eight items matters more than
+    # eighty one-item accounts, and the request budget is finite.
+    for name, d in sorted(creators.items(), key=lambda kv: -kv[1].get("items", 0)):
+        key = f"{d.get('type')}:{d.get('id')}"
+        if not d.get("id") or d.get("verified") is not None:
+            continue
+        if key in cache:
+            d["verified"] = cache[key]
+            continue
+        if asked >= 120:
+            break
+        url = (f"https://groups.roblox.com/v1/groups/{d['id']}" if str(d.get("type")).lower() == "group"
+               else f"https://users.roblox.com/v1/users/{d['id']}")
+        d["verified"] = None
+        for attempt in (1, 2, 3):
+            try:
+                with urllib.request.urlopen(urllib.request.Request(
+                        url, headers={"User-Agent": "Mozilla/5.0 (GEEIQ brand check)"}),
+                        timeout=15) as r:
+                    j = json.load(r)
+                d["verified"] = bool(j.get("hasVerifiedBadge"))
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 429 and attempt < 3:
+                    time.sleep(5 * attempt)   # Roblox rate limit; wait it out
+                    continue
+                break
+            except Exception:
+                break
+        # Only a real answer is cached. A failed lookup cached as "unknown"
+        # would silence the gate on every rerun of that data.
+        if d["verified"] is not None:
+            cache[key] = d["verified"]
+        asked += 1
+        time.sleep(0.6)
+    try:
+        json.dump(cache, open(cache_path, "w"))
+    except Exception:
+        pass
+
+
 CONTEXT_SCREENS = {
     "kinder": ("chocolate", ["bueno", "surprise", "egg", "eggs", "chocolate", "choco", "joy",
                              "schoko", "ferrero", "happy hippo", "hippo", "maxi", "country",
@@ -547,7 +630,63 @@ def analyse(csv_dir, brand):
         fan = [r for r in fan if matches(r.get("Name"), ctx_terms)]
         print(f"  context screen ({context_label}): {fan_named_raw} rows name {brand}, "
               f"{len(fan)} are {context_label} products; the rest are excluded")
-    noise_items = [r for r in items if r not in official and r not in fan]
+    # --- Partner-run presence: the signal the string test cannot see. ---
+    # Licensed IP reaches Roblox through partners (Mr Bean through Cartoon
+    # Network Games, True through cSapphire). Their items sit in `fan` above
+    # because the creator name is not the brand. Roblox's verified badge marks
+    # the accounts worth asking about; the GEEIQ platform (or a known licensee
+    # name) decides. Anything verified that the platform cannot place stays
+    # creator-made in the figures but blocks every "no official" sentence.
+    has_verified_col = bool(items) and "Creator Verified" in items[0]
+    named_creators = {}
+    for r in fan:
+        c = (r.get("Creator") or "").strip()
+        if not c:
+            continue
+        d = named_creators.setdefault(c, {"type": r.get("Creator Type", ""),
+                                          "id": str(r.get("Creator ID") or ""),
+                                          "items": 0, "verified": None})
+        d["items"] += 1
+        if r.get("Creator Verified") == "yes":
+            d["verified"] = True
+        elif has_verified_col:
+            d["verified"] = False
+    if not has_verified_col and named_creators:
+        backfill_verified(named_creators, os.path.join(csv_dir, "creator_verified.json"))
+    verified_names = sorted((c for c, d in named_creators.items() if d.get("verified")),
+                            key=lambda c: -named_creators[c]["items"])
+    platform = {"checked": False, "error": "skipped (BRAND_CHECK_NO_PLATFORM)"}
+    if os.environ.get("BRAND_CHECK_NO_PLATFORM") != "1":
+        platform = platform_check.check(brand, verified_names[:8],
+                                        os.path.join(csv_dir, "platform_check.json"))
+        if platform.get("error"):
+            print(f"  platform check: {platform['error']}")
+    partner_of = {}   # creator -> platform brand it issues for
+    for c, d in named_creators.items():
+        known = known_licensee(c, d.get("id"), d.get("verified"))
+        if known:
+            partner_of[c] = known
+    for c in verified_names:
+        m = (platform.get("creator_matches") or {}).get(c) or {}
+        if c not in partner_of and isinstance(m, dict) and (m.get("partnerships_2y") or 0) > 0:
+            partner_of[c] = m.get("brand") or c
+    partner_items = [r for r in fan if (r.get("Creator") or "").strip() in partner_of]
+    fan = [r for r in fan if (r.get("Creator") or "").strip() not in partner_of]
+    partner_issuers = [{"creator": c, "brand": b, "items": named_creators[c]["items"],
+                        "drops_2y": ((platform.get("creator_matches") or {}).get(c) or {}).get("item_drops_2y")
+                        if isinstance((platform.get("creator_matches") or {}).get(c), dict) else None}
+                       for c, b in partner_of.items()]
+    partner_issuers.sort(key=lambda x: -x["items"])
+    verified_unplaced = [{"creator": c, "items": named_creators[c]["items"]}
+                         for c in verified_names if c not in partner_of]
+    if partner_issuers:
+        print("  official via partner: " + "; ".join(
+            f"{x['creator']} -> {x['brand']} ({x['items']} items)" for x in partner_issuers))
+    if verified_unplaced:
+        print("  verified accounts issuing brand-named items, not placed by the platform: "
+              + ", ".join(x["creator"] for x in verified_unplaced[:6]))
+
+    noise_items = [r for r in items if r not in official and r not in fan and r not in partner_items]
     creators = sorted({r["Creator"] for r in fan if r.get("Creator")})
     _tally = {}
     for r in fan:
@@ -567,7 +706,7 @@ def analyse(csv_dir, brand):
     fan_ranked = [r for r in fan if id(r) not in soup_ids]
     soup_favs = sum(fav_key(r) for r in soup)
     fan_favs = sum(fav_key(r) for r in fan)
-    top_item = max(official + fan_ranked, key=fav_key, default=None)
+    top_item = max(official + partner_items + fan_ranked, key=fav_key, default=None)
 
     # An experience is the brand's own when its creator is the brand's
     # account, whatever the experience is called (The Hut never says Pizza
@@ -575,6 +714,9 @@ def analyse(csv_dir, brand):
     def is_official_game(r):
         if is_official(r.get("Creator"),
                        verified=r.get("Verified Creator") == "yes"):
+            return True
+        # Run by a partner the platform or the licensee list vouches for.
+        if (r.get("Creator") or "").strip() in partner_of:
             return True
         # Run by a partner, declared as the brand's in the description.
         return sanctioned_activation(brand, r.get("Description"))
@@ -596,7 +738,8 @@ def analyse(csv_dir, brand):
                    and (_loose(r["Creator"]) in loose_norms
                         or near_pat.search(r["Creator"]))
                    and not is_official(r.get("Creator"),
-                                       verified=r.get("Verified Creator") == "yes")})
+                                       verified=r.get("Verified Creator") == "yes")
+                   and r.get("Creator") not in partner_of})
     g_match = [r for r in games if matches(r["Name"], terms) or r in g_official]
     # Same product-context screen for experiences: "Push Dominos" (2.9m visits)
     # is a tile game, and would otherwise head a Domino's Pizza report.
@@ -661,6 +804,17 @@ def analyse(csv_dir, brand):
         "short_name": core_brand(brand) if short_only else "",
         "items_total": len(items),
         "items_official": len(official),
+        "items_partner": len(partner_items),
+        "partner_issuers": partner_issuers,
+        "verified_unplaced": verified_unplaced,
+        "platform": {k: platform.get(k) for k in ("checked", "error", "brand_entity",
+                                                   "brand_partnerships_2y", "checked_at")}
+        | {"brand_latest": (platform.get("brand_partnerships") or [None])[0]},
+        # When any of these is true the copy may not assert absence: a verified
+        # account is issuing the brand's items, a partner is placed, or the
+        # platform holds partnership records for the brand itself.
+        "presence_claim_blocked": bool(partner_items or verified_unplaced
+                                       or (platform.get("brand_partnerships_2y") or 0)),
         "items_fan": len(fan),
         "items_named_raw": fan_named_raw,
         "context_label": context_label,
@@ -711,8 +865,9 @@ def analyse(csv_dir, brand):
         "top_items_named": [
             {"name": r["Name"], "favorites": to_int(r.get("Favorites")),
              "creator": r.get("Creator"), "price": r.get("Price"),
-             "official": bool(is_official(r.get("Creator")))}
-            for r in sorted(official + fan_ranked, key=fav_key, reverse=True)[:3]
+             "official": bool(is_official(r.get("Creator"))) or (r.get("Creator") or "").strip() in partner_of,
+             "partner": partner_of.get((r.get("Creator") or "").strip())}
+            for r in sorted(official + partner_items + fan_ranked, key=fav_key, reverse=True)[:3]
             if to_int(r.get("Favorites"))
         ],
         "top_creators": top_creators,
@@ -732,6 +887,7 @@ def analyse(csv_dir, brand):
         "official_via_partner": [f"{r['Name']} (run by {r.get('Creator')})"
                                  for r in g_by_partner],
         "sample_official": [r["Name"] for r in official[:8]],
+        "sample_partner": [f"{r['Name']} (by {r.get('Creator')})" for r in partner_items[:8]],
         "sample_official_games": [f"{r['Name']} (by {r.get('Creator')})" for r in g_official[:8]],
         "sample_fan": [f"{r['Name']} (by {r['Creator']})" for r in fan[:8]],
         "sample_noise": [r["Name"] for r in noise_items[:8]],
@@ -775,6 +931,16 @@ def candidates(a):
     if a["items_official"]:
         out.append({"num": fmt(a["items_official"]) + floor,
                     "label": f"official {a['brand']} items on the marketplace"})
+    if a.get("items_partner"):
+        who = ", ".join(sorted({x["brand"] for x in a.get("partner_issuers") or []}))
+        out.append({"num": fmt(a["items_partner"]),
+                    "label": f"official {a['brand']} items on the marketplace, issued through {who}"})
+    plat = a.get("platform") or {}
+    if plat.get("brand_partnerships_2y"):
+        n = plat["brand_partnerships_2y"]
+        out.append({"num": str(n),
+                    "label": f"{a['brand']} partnership{'s' if n != 1 else ''} in virtual worlds "
+                             f"in the last two years, on the GEEIQ platform"})
     if a["items_fan"]:
         out.append({"num": fmt(a["items_fan"]) + floor,
                     "label": f"creator-made {a['brand']} items on the marketplace"})
@@ -872,10 +1038,22 @@ def template_copy(a, cands):
     if stats:
         demote_youtube(stats)
         stats[0] = {**stats[0], "coral": True}
-    has_official = a["items_official"] or a["games_official"]
+    has_official = a["items_official"] or a["games_official"] or a.get("items_partner")
+    partners = ", ".join(sorted({x["brand"] for x in a.get("partner_issuers") or []}))
+    blocked = a.get("presence_claim_blocked")
     if has_official:
         angle = "official"
-        if a["games_official"] and a["official_visits"]:
+        if a.get("items_partner") and not a["items_official"] and not a["games_official"]:
+            at_least = "at least " if a.get("items_truncated") else ""
+            n = a['items_partner']
+            headline = (f"{a['brand']} is on Roblox through {partners}, with {fmt(n)} official "
+                        f"item{'s' if n != 1 else ''} on the marketplace")
+            # Short on purpose: the hero card carries the visits figure, and a
+            # three-line headline pushes the method strip off the page.
+            headline += (", plus what players have built around it."
+                         if a["combined_visits"] else
+                         f", alongside {at_least}{fmt(a['items_fan'])} creator-made items.")
+        elif a["games_official"] and a["official_visits"]:
             headline = (f"{a['brand']} runs an official presence on Roblox: "
                         f"{a['games_official']} live experience"
                         f"{'s' if a['games_official'] != 1 else ''} with "
@@ -898,18 +1076,35 @@ def template_copy(a, cands):
                         f"{at_least}{fmt(a['items_official'])} items on the marketplace.")
     else:
         angle = "whitespace"
+        at_least = "at least " if a.get("items_truncated") else ""
+        # Fail closed. A verified account issuing the brand's items, or a
+        # platform record, means absence cannot be asserted from this data.
+        # Name what was found and stop there.
+        ver = a.get("verified_unplaced") or []
+        if blocked and ver:
+            who = ver[0]["creator"]
+            tail = (f", and {fmt(ver[0]['items'])} {a['brand']} item"
+                    f"{'s' if ver[0]['items'] != 1 else ''} from {who}, a Roblox-verified account.")
+        elif blocked:
+            tail = ". The GEEIQ platform holds partnership records for the brand, see page notes."
+        else:
+            tail = ". None are official."
         if a["combined_visits"]:
             headline = (f"We found {fmt(a['combined_visits'])} lifetime visits across "
-                        f"creator-made {a['brand']} experiences on Roblox. None are official.")
+                        f"player-made {a['brand']} experiences on Roblox{tail}")
         else:
-            at_least = "at least " if a.get("items_truncated") else ""
             headline = (f"We found {at_least}{fmt(a['items_fan'])} creator-made "
-                        f"{a['brand']} items on the Roblox marketplace. "
-                        "None are official.")
+                        f"{a['brand']} items on the Roblox marketplace{tail}")
     tg = a["top_game"]
     reading_bits = []
-    if angle == "whitespace":
+    if angle == "whitespace" and blocked:
+        reading_bits.append("Most of this presence is player-made; the accounts flagged "
+                            "on the page need confirming before anything is called official or not.")
+    elif angle == "whitespace":
         reading_bits.append("Players built this presence with no involvement from the brand.")
+    elif a.get("items_partner") and not a["items_official"]:
+        reading_bits.append(f"The official items come through {partners}, and a larger "
+                            "creator-made footprint sits alongside them.")
     elif a["items_fan"] > a["items_official"]:
         reading_bits.append("The official catalogue sits alongside a larger creator-made footprint.")
     elif a["items_fan"]:
@@ -918,7 +1113,7 @@ def template_copy(a, cands):
         reading_bits.append("The presence is almost entirely first party so far.")
     if tg:
         reading_bits.append(
-            f"Attention concentrates in the standouts: {tg['name']} alone has "
+            f"Attention concentrates in the standouts: {strip_emoji(tg['name'])} alone has "
             f"{fmt(tg['visits'])} visits.")
     reading_bits.append(
         f"Demand for {a['brand']} in virtual worlds already exists. "
@@ -960,6 +1155,19 @@ or figures.games_official above zero), still report the creator-made footprint
 alongside it, and when the presence is entirely creator-made say no official
 presence exists. The contrast between official and player-made is the story;
 never let one side crowd the other out entirely.
+
+Partners, absolute rule: figures.items_partner counts items issued for the brand
+by a licensee or partner account named in figures.partner_issuers (for example
+Cartoon Network Games issuing Mr Bean items). These ARE official presence:
+credit them by partner name in the headline or reading, and never write that
+the brand has no official presence when items_partner is above zero.
+
+Fail closed, absolute rule: when figures.presence_claim_blocked is true you
+may not assert absence in any form. Banned while blocked: "no official
+presence", "none are official", "not official", "no brand presence", "built
+entirely by players", "no involvement from the brand", "nothing official".
+Describe what was found, name the verified accounts in figures.verified_unplaced
+as "a Roblox-verified account", and leave the judgement to the analyst.
 
 Scope, absolute rule: presence claims are always scoped to what was searched.
 Write "no official presence on Roblox" or "on Roblox's marketplace", never "no
@@ -1010,6 +1218,17 @@ Respond with ONLY a JSON object:
 notes_for_analyst: anything odd in the data, likely false positives or lookalikes."""
 
 
+ABSENCE_RE = re.compile(
+    r"\b(?:no|zero|without|not an?|lacks?|nothing)\s+(?:any\s+)?official"
+    r"|\bnone\s+(?:are|is|of\s+\w+\s+(?:are|is))\s+official"
+    r"|\bnot\s+official\b|\bno\s+brand\s+presence|\bbuilt\s+entirely\s+by\s+players"
+    r"|\bno\s+involvement\s+from\s+the\s+brand|\bnothing\s+official"
+    r"|\bno\s+official\s+studio", re.I)
+WIDENED_RE = re.compile(
+    r"official\s+presence\s+(?:anywhere|on\s+any\s+platform|in\s+(?:gaming|virtual\s+worlds))"
+    r"|marketplace\s+or\s+in\s+its\s+experiences", re.I)
+
+
 def claude_copy(a, cands, api_key):
     body = {
         "model": os.environ.get("BRAND_CHECK_MODEL", "claude-sonnet-5"),
@@ -1048,6 +1267,14 @@ def claude_copy(a, cands, api_key):
         problems = lint(prose)
         if bad_nums:
             problems.append(f"stats not in candidate list: {bad_nums}")
+        # guardrail 3: no absence claims when the data cannot support one
+        if a.get("presence_claim_blocked") or a.get("items_partner"):
+            hit = ABSENCE_RE.search(prose)
+            if hit:
+                problems.append(f"absence claim not allowed for this brand: '{hit.group(0)}'")
+        widened = WIDENED_RE.search(prose)
+        if widened:
+            problems.append(f"presence claim must stay scoped to the marketplace: '{widened.group(0)}'")
         corals = sum(1 for s in out.get("stats", []) if s.get("coral"))
         if corals != 1:
             problems.append("exactly one stat must have coral true")
@@ -1160,6 +1387,8 @@ def main():
                               (strip_emoji(n) for n
                                in (a.get("near_official_creators") or [])) if x],
                "top_creators": print_safe(a.get("top_creators"), "name"),
+               "partner_issuers": a.get("partner_issuers") or [],
+               "platform_check": a.get("platform") or {},
                "platform_views": a["platform_views"]}
 
     print("== rendering ==")
@@ -1192,6 +1421,28 @@ def main():
             f.write("\n\nYouTube videos excluded as keyword collisions "
                     "(did not name the brand):\n - "
                     + "\n - ".join(a["youtube_dropped_examples"]))
+        plat = a.get("platform") or {}
+        f.write("\n\nPLATFORM CHECK: " + (
+            f"done {plat.get('checked_at')}. Brand entity: "
+            f"{(plat.get('brand_entity') or {}).get('title') or 'not on the platform under this name'}; "
+            f"{plat.get('brand_partnerships_2y') or 0} partnership records in two years"
+            + (f", latest {plat['brand_latest']['game']} {plat['brand_latest']['start']} ({plat['brand_latest']['type']})"
+               if plat.get("brand_latest") else "")
+            if plat.get("checked") else f"NOT DONE: {plat.get('error')}. Do it by hand before approving."))
+        if a.get("partner_issuers"):
+            f.write("\n\nOFFICIAL VIA PARTNER: items issued by verified accounts the platform "
+                    "or the licensee list places as the brand's partners: "
+                    + "; ".join(f"{x['creator']} -> {x['brand']} ({x['items']} items"
+                                + (f", {x['drops_2y']} item drops on the platform in two years" if x.get("drops_2y") else "")
+                                + ")" for x in a["partner_issuers"]))
+        if a.get("verified_unplaced"):
+            f.write("\n\nVERIFIED, NOT PLACED: Roblox-verified accounts issuing brand-named "
+                    "items that the platform does not place as partners. The report does "
+                    "not call the presence absent while these exist; confirm each: "
+                    + "; ".join(f"{x['creator']} ({x['items']} items)" for x in a["verified_unplaced"][:8]))
+        if a.get("presence_claim_blocked"):
+            f.write("\n\nPRESENCE CLAIM BLOCKED: the copy was not allowed to say the brand "
+                    "has no official presence. Confirm the accounts above, then edit if absence is true.")
         if a.get("official_via_partner"):
             f.write("\n\nCounted as official on the strength of the experience "
                     "description, not the account name (a partner studio runs "
@@ -1237,6 +1488,7 @@ def main():
                     + json.dumps(shown)
                     + (f" (+{more} more)" if more else ""))
         f.write("\n\nSample official rows: " + json.dumps(a["sample_official"]))
+        f.write("\nSample partner-issued rows: " + json.dumps(a.get("sample_partner") or []))
         f.write("\nSample official experiences: " + json.dumps(a["sample_official_games"]))
         f.write("\nSample creator-made rows: " + json.dumps(a["sample_fan"]))
         f.write("\nSample excluded rows: " + json.dumps(a["sample_noise"]))

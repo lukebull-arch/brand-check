@@ -334,6 +334,63 @@ def _looks_like_image(raw):
         b"\x89PNG\r\n\x1a\n",) or (raw or b"")[:3] == b"\xff\xd8\xff"
 
 
+# Site builders serve their own favicon for every customer site that never set
+# one. Wix's default is a known file; and a builder-hosted site announces
+# itself in response headers, which is the cheaper and surer test.
+PLATFORM_DEFAULT_FAVICONS = ("https://static.parastorage.com/client/pfavico.ico",)
+_platform_favicon_cache = {}
+BUILDER_HEADER_MARKS = ("x-wix-request-id", "x-shopify-stage", "x-shopid",
+                        "x-squarespace", "x-served-by: cache-", "server: squarespace",
+                        "server: pepyaka", "x-wf-", "x-godaddy")
+
+
+def _pixel_key(raw):
+    try:
+        from PIL import Image
+        im = Image.open(io.BytesIO(raw)).convert("RGBA").resize((16, 16))
+        return bytes(v // 32 for px in im.getdata() for v in px)
+    except Exception:
+        return None
+
+
+def _is_platform_favicon(raw):
+    key = _pixel_key(raw)
+    if key is None:
+        return False
+    for u in PLATFORM_DEFAULT_FAVICONS:
+        if u not in _platform_favicon_cache:
+            try:
+                ref = _get(u)
+                _platform_favicon_cache[u] = _pixel_key(ref) if ref else None
+            except Exception:
+                _platform_favicon_cache[u] = None
+        if _platform_favicon_cache[u] and _platform_favicon_cache[u] == key:
+            return True
+    return False
+
+
+def _hosted_by_builder(domain):
+    """True when the site's response headers name a site builder (Wix,
+    Shopify, Squarespace, Webflow, GoDaddy). Their favicons are the builder's
+    unless the owner set one, so a favicon from such a site is not trusted."""
+    for scheme in ("https://www.", "https://"):
+        try:
+            req = urllib.request.Request(scheme + domain, method="HEAD",
+                                         headers={"User-Agent": "Mozilla/5.0 (GEEIQ brand check)"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                headers = r.headers
+        except urllib.error.HTTPError as e:
+            # A 403 or 404 still comes with the host's headers, which is all
+            # this needs (Wix answers HEAD with 404 and x-wix-request-id).
+            headers = e.headers
+        except Exception:
+            continue
+        hdrs = "\n".join(f"{k.lower()}: {v.lower()}" for k, v in headers.items())
+        if any(m in hdrs for m in BUILDER_HEADER_MARKS):
+            return True
+    return False
+
+
 def fetch(brand, out_dir=None):
     """Return {"path", "source", "matched", "is_light"} or None."""
     out_dir = out_dir or CACHE
@@ -472,16 +529,25 @@ def fetch(brand, out_dir=None):
             except Exception as e:
                 print(f"   logo: site logo failed ({type(e).__name__})")
 
-    # 3. Favicon last: always answers, but only ever 32-256px
-    if not raw:
-        fav_domain = domain or f"{slug.replace('-', '')}.com"
+    # 3. Favicon last: always answers, but only ever 32-256px, and only for a
+    # domain the entity lookup confirmed. A guessed "<brand>.com" is how a Mr
+    # Bean report went out under a Wix logo: mrbean.com is a Wix site and its
+    # favicon is Wix's. No logo beats the wrong logo.
+    if not raw and domain:
         try:
-            candidate = _get(
-                f"https://www.google.com/s2/favicons?domain={fav_domain}&sz=256")
-            if _looks_like_image(candidate):
-                raw, source = candidate, f"favicon: {fav_domain}"
+            if _hosted_by_builder(domain):
+                print(f"   logo: {domain} is hosted on a site builder; its favicon is not trusted, skipped")
+            else:
+                candidate = _get(
+                    f"https://www.google.com/s2/favicons?domain={domain}&sz=256")
+                if _looks_like_image(candidate) and not _is_platform_favicon(candidate):
+                    raw, source = candidate, f"favicon: {domain}"
+                elif candidate:
+                    print(f"   logo: favicon for {domain} is a site builder's default; skipped")
         except Exception as e:
             print(f"   logo: favicon lookup failed ({type(e).__name__})")
+    elif not raw:
+        print(f"   logo: no confirmed domain for {brand}; favicon guess skipped")
 
     if not raw:
         return None

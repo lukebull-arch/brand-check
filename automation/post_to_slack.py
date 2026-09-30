@@ -97,6 +97,39 @@ def review_flags(summary_path, brand):
                      f"{shown}{more}. Imitators mostly, but a partner running a "
                      "sponsored activation looks identical in the data.")
 
+    issuers = data.get("partner_issuers") or []
+    if issuers:
+        lines.append(":handshake: *Official via partner:* "
+                     + "; ".join(f"`{x['creator']}` issues {x['items']} items, placed as "
+                                 f"{x['brand']}" + (f" ({x['drops_2y']} item drops on the platform in two years)"
+                                                     if x.get("drops_2y") else "")
+                                 for x in issuers[:4])
+                     + ". Counted as official presence; the copy credits the partner.")
+    unplaced = data.get("verified_unplaced") or []
+    if unplaced:
+        lines.append(":shield: *Roblox-verified accounts issuing brand-named items, not placed "
+                     "by the platform:* "
+                     + ", ".join(f"`{x['creator']}` ({x['items']})" for x in unplaced[:5])
+                     + ". A licensee or an imitator; the report does not call the brand "
+                     "absent while these exist. Confirm before approving.")
+    plat = data.get("platform") or {}
+    if plat.get("checked"):
+        ent = (plat.get("brand_entity") or {}).get("title")
+        n = plat.get("brand_partnerships_2y") or 0
+        latest = plat.get("brand_latest") or {}
+        lines.append(f":white_check_mark: *Platform checked {plat.get('checked_at')}:* "
+                     + (f"{ent}, {n} partnership record{'s' if n != 1 else ''} in two years"
+                        + (f", latest {latest.get('game')} {latest.get('start')}" if latest else "")
+                        if ent else "brand not on the platform under this name")
+                     + ". Partner items are looked up by issuer, so a licensee's drops still count.")
+    else:
+        lines.append(f":x: *Platform check did not run:* {plat.get('error') or 'unknown'}. "
+                     "Do it by hand before approving.")
+    if data.get("presence_claim_blocked"):
+        lines.append(":lock: *Absence claim blocked:* the copy was not allowed to say "
+                     "there is no official presence. If you confirm absence, edit the copy; "
+                     "do not approve a draft that says nothing either way if the reader owns the IP.")
+
     partner = data.get("official_via_partner") or []
     if partner:
         lines.append(":handshake: *Counted as official from the experience "

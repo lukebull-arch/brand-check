@@ -1,84 +1,111 @@
-# Brand opportunity report skill
+# Brand opportunity report skill, v6
 
-A Claude skill for the sales team. Give Claude a brand name and it pulls the
-brand's Roblox marketplace and experience data plus YouTube gaming content,
-then builds a one-page GEEIQ-styled opportunity report you can print to PDF
-and use in account-based marketing.
+A Claude skill for the sales team. Give Claude a brand name and it runs the
+same pipeline as the automated GEEIQ brand checker: pulls the brand's Roblox
+marketplace and experience data plus YouTube gaming content, classifies it,
+fetches the logo, writes the copy and renders the approved two-page GEEIQ
+report as a PDF. Claude then does the checks the code cannot, and edits the
+copy before anything goes out.
 
 ## Install
 
-1. Copy the `brand-opportunity-report` folder into your skills directory:
-
-   - Claude Code (CLI or desktop app): `~/.claude/skills/`
-   - So you end up with `~/.claude/skills/brand-opportunity-report/SKILL.md`
-
-2. Set the YouTube API key so the YouTube data is included (ask Luke for the
-   key). Add to your `~/.zshrc`:
-
-   ```bash
-   export YOUTUBE_API_KEY="paste-key-here"
-   ```
-
-   Without it the report still works, Roblox only.
-
-3. Requires Python 3 (preinstalled on every Mac). No packages to install.
+1. Replace any earlier copy. Delete `~/.claude/skills/brand-opportunity-report`
+   if it exists, then copy this folder there, so you end up with
+   `~/.claude/skills/brand-opportunity-report/SKILL.md`.
+2. Google Chrome installed (the renderer prints through it). Python 3 is on
+   every Mac already.
+3. Optional, recommended: `pip3 install pillow segno` for the QR code and
+   cleaner logo handling. Without them the report still renders, minus the QR.
+4. YouTube: add `export YOUTUBE_API_KEY="..."` to `~/.zshrc` (ask Luke).
+   Without it the report is Roblox only and says so.
+5. Nothing else. The first run creates a small `.venv` inside `scripts/` for
+   the fallback renderer; let it.
 
 ## Use
 
-Start a Claude session anywhere and ask, for example:
+In a Claude Code session anywhere:
 
-- "Build a brand opportunity report for Casio"
+- "Run a brand check on Casio"
 - "What does Nike look like on Roblox?"
-- "Run a brand check on LVMH for tomorrow's pitch"
+- "Build me a brand opportunity report for the LVMH pitch"
 
-Claude collects the data (takes a few minutes, the script is deliberately
-polite to the platform APIs), filters out unrelated search results, and
-writes `GEEIQ_Opportunity_[Brand]_[YYYY-MM].html`. Open it in a browser and
-print to PDF for sharing.
+Claude runs `scripts/run.py`, which takes twenty to sixty minutes for a real
+brand because it collects to exhaustion and backs off when Roblox rate-limits
+it. It then reads `analyst_summary.txt`, checks the GEEIQ platform and the web
+for anything the public data cannot see, rewrites the copy to house style and
+hands you `GEEIQ_Brand_check_<Brand>_<YYYY-MM>.pdf` with the CSVs beside it.
 
 ## What to trust
 
-Every number in the report traces to a row in the collected CSVs (saved in
-`out/<brand>/` next to the report, so you can check). The collector now pulls
-the marketplace until Roblox stops returning results, so a big brand takes a
-few minutes and the counts are real. Where a platform limit is reached the run
-prints a warning and the report has to say "at least N". Creator-made content
-is fan-made and unofficial; the report never implies the brand endorsed it.
+Every number traces to a row in `out/<brand>/data/`, a platform screen, or
+`peers.json`. Where Roblox's search limit was hit the figure is written as
+"at least N" and the method strip says why. Creator-made content is
+player-made and never implied to be endorsed. Presence claims are always
+scoped to the platform searched.
 
 ## Questions
 
 luke.bull@geeiq.com
 
+## v6 (30 September 2026)
+
+The pipeline now runs the GEEIQ platform check itself (`scripts/platform_check.py`,
+needs `GEEIQ_API_TOKEN`), places Roblox-verified issuers as "official via partner"
+when the platform or the licensee list vouches for them, and refuses to write any
+absence claim while a verified issuer or a partnership record exists. The favicon
+fallback no longer guesses a domain or trusts a site builder's default mark. Mr Bean
+(Cartoon Network Games, eight licensed items) was the case that forced it.
+
+## v5 (25 September 2026)
+
+Replace your installed copy entirely. The old bundled collector was a fork
+from August and it was 559 lines behind the live one. v5 ships the live
+pipeline itself, so every fix below is in the code you run, not in prose you
+have to remember:
+
+- Sort-order sweep: Roblox's 1,000-row cap is per query and per sort order,
+  and each sort exposes a different slice, so the collector now sweeps all
+  four. On Aston Villa that found 17% more matching items.
+- Whole-word matching. "Aldi" no longer matches "Maldivian Hotel" (17.5m
+  visits) and "Target" no longer matches every shooting game.
+- Keyword-soup spam is excluded from favourite figures and flagged; if spam
+  holds most of a brand's favourites the summary tells you to quote none.
+- Long club names: "Brighton Home Kit 22-23" now counts for Brighton & Hove
+  Albion, which had been undercounted 8.5 times.
+- Impersonator accounts ("Gregg's(tm)", "Greggs RBLX") never count as
+  official. Punctuation is significant; only Roblox's verified badge can
+  rescue a variant.
+- "Officially licensed" in a description must name the brand. A dungeon game
+  licensed by a studio no longer becomes a confectioner's own experience.
+- Context screens for ordinary-word brands (Kinder, Domino's, Snickers):
+  a listing counts only when it also names the product.
+- YouTube: deduplicated by video id across platform searches, dropped
+  entirely when under 30% of the named view volume is gaming content.
+- Logos: people, wrong-market marks, retired marks and sponsor lockups are
+  guarded against, and the summary tells you which entity the logo came from
+  so you check it.
+- Print-safe names: emoji and non-Latin scripts stripped from the page, tm
+  and (r) kept so imitators are not displayed as the brand.
+- The approved layout with the embedded fonts, the QR code to the walkthrough
+  page, and the standing page 2.
+- New `scripts/grab_hidden.py` for marks Roblox search returns nothing for
+  (Nike, Aston Martin, Rolls Royce, BMW): slang, model codes, creator stores
+  and fan groups, every count a floor.
+- New `scripts/peers.py` to verify peer and category figures from the games
+  API before they go on a page.
+- SKILL.md rewritten around the three failures that mattered most: reports
+  that told a brand it was absent from a platform it had launched on. The
+  platform check and the web check are mandatory, limited drops are called
+  out, and the framing rule (missed opportunity, never infringement) is
+  binding.
+
 ## v4 (13 August 2026)
 
-Replace your installed copy again. This one fixes an undercount, not a
-wording problem:
-
-- The collector paginates the marketplace to exhaustion by default. It used
-  to stop after 5 pages with more results waiting and say nothing, which
-  reported 54 fan-made Chelsea items when there were 1,047. Thanks Sam for
-  catching it.
-- `--pages` is now an opt-in sample and prints a truncation warning whenever
-  it stops early. So does the Roblox 1,000-row-per-query ceiling, which turns
-  a count into "at least N".
-- Bracketed names and org suffixes are searched both ways: "Chelsea (FC)"
-  also pulls and matches plain "Chelsea", which is how fans actually name
-  their items.
-- Experience and YouTube searches run the same variants, dedupe across them,
-  and label YouTube as a top sample rather than a census.
-- Runs take longer now. That is the fix working.
+- Collector paginated the marketplace to exhaustion instead of stopping at
+  five pages (54 Chelsea items became 1,047). `--pages` became an opt-in sample
+  with a warning. Bracketed names and org suffixes searched both ways.
 
 ## v3 (11 August 2026)
 
-Significant update, replace your installed copy entirely:
-
-- New report layout, the approved GEEIQ template (bundled as
-  report-template.html) with brand-correct typography.
-- Official-presence classification hardened: imitator accounts
-  ("Gregg's™") no longer count, partner-run activations declared in
-  experience descriptions do.
-- New mandatory step: verify against the GEEIQ platform before claiming
-  anything about official presence. You need your app.geeiq.com login.
-- YouTube figures are now deduplicated and dropped entirely when the view
-  volume is mostly non-gaming content (physical-product brands, take note).
-- Presence claims are always scoped: "on Roblox", never "anywhere".
+- Approved GEEIQ layout, hardened official-presence classification, mandatory
+  platform check, YouTube dedupe and contamination drop, scoped claims.
