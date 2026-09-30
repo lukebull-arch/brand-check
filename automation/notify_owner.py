@@ -102,6 +102,19 @@ def legacy_payload(contact, company, own):
     }
 
 
+STATUS_PATH = os.environ.get("OWNER_ALERT_STATUS", "automation/.owner_alert_status")
+
+
+def _status(text):
+    """One line the Slack draft can show, so a skipped alert is visible."""
+    try:
+        os.makedirs(os.path.dirname(STATUS_PATH) or ".", exist_ok=True)
+        with open(STATUS_PATH, "w") as f:
+            f.write(text.strip() + "\n")
+    except Exception:
+        pass
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--email", required=True)
@@ -112,12 +125,19 @@ def main():
 
     token = os.environ.get("HUBSPOT_TOKEN")
     if not token:
-        print("HUBSPOT_TOKEN not set, skipping the owner alert.")
+        # Loud, not quiet: this skipped silently on every run from 25 Sep
+        # 2026 until a Banijay lead asked why #mql-leads never heard about her
+        # brand check. The status file reaches the Slack draft as a flag.
+        print("::warning::HUBSPOT_TOKEN secret not set: the contact owner was NOT alerted.")
+        _status("HUBSPOT_TOKEN secret is not set, so the contact owner was not "
+                "alerted and #mql-leads heard nothing. Add the secret "
+                "(gh secret set HUBSPOT_TOKEN) or alert the owner by hand.")
         return
 
     contact = find_contact(args.email, token)
     if not contact:
         print(f"No HubSpot contact for {args.email}, nothing to alert on.")
+        _status(f"no HubSpot contact for {args.email}; nobody owns this lead yet.")
         return
 
     p = contact.get("properties") or {}
@@ -125,6 +145,8 @@ def main():
     if not owner_id:
         print(f"{args.email} has no owner, so there is nobody to alert. "
               f"Lifecycle stage: {p.get('lifecyclestage') or 'unset'}.")
+        _status(f"{args.email} has no HubSpot owner (lifecycle "
+                f"{p.get('lifecyclestage') or 'unset'}); no alert sent.")
         return
 
     own = owner(owner_id, token)
@@ -144,12 +166,15 @@ def main():
         with urllib.request.urlopen(req, timeout=30) as r:
             print(f"  re-engagement alert fired ({r.status}) for "
                   f"{args.brand or 'brand check'}")
+            _status(f"owner {who} alerted through the MQL re-engagement workflow.")
     except urllib.error.HTTPError as e:
         print(f"  re-engagement webhook returned {e.code}; the report is "
               f"unaffected, but {who} was not alerted")
+        _status(f"re-engagement webhook returned {e.code}; {who} was NOT alerted. Tell them by hand.")
     except Exception as e:
         print(f"  re-engagement webhook unreachable ({type(e).__name__}); "
               f"{who} was not alerted")
+        _status(f"re-engagement webhook unreachable; {who} was NOT alerted. Tell them by hand.")
 
 
 if __name__ == "__main__":

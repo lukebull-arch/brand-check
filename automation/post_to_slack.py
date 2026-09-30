@@ -67,6 +67,20 @@ def review_flags(summary_path, brand):
     puts them next to the Approve button.
     """
     lines = []
+    # Whether sales heard about this lead. Written by notify_owner.py, which
+    # runs before the build; a missing file means that step never ran.
+    status_path = os.environ.get("OWNER_ALERT_STATUS", "automation/.owner_alert_status")
+    try:
+        status = open(status_path).read().strip()
+    except Exception:
+        status = ""
+    if status and "alerted through" in status:
+        lines.append(f":bell: *Contact owner:* {status}")
+    elif status:
+        lines.append(f":rotating_light: *Contact owner NOT alerted:* {status}")
+    else:
+        lines.append(":rotating_light: *Contact owner NOT alerted:* the owner-alert step "
+                     "left no status. Check HubSpot for an owner and tell them by hand.")
     data = {}
     try:
         import re as _re
