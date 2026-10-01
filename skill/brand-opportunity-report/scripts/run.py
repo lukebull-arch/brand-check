@@ -313,6 +313,11 @@ def sanctioned_pattern(brand):
     across Greggs, KFC and adidas with no false positives.
     """
     b = re.escape(brand.strip()).replace(r"\ ", r"\s*")
+    # "Join the official dc server" is Discord, not DC: a DC report credited DC
+    # with a Tokyo Ghoul fighter and a German fire-service sim this way. The
+    # brand followed by a community or social word is never an activation.
+    b += (r"(?!\s*(?:server|discord|group|community|channel|page|link|codes?"
+          r"|twitter|tiktok|youtube|insta(?:gram)?|socials?)\b)")
     dash = r"[-‐-―−]"
     parts = [
         # \b matters: without it "unofficial Greggs" matches "official Greggs".
@@ -565,6 +570,15 @@ CONTEXT_SCREENS = {
                            "worker", "staff", "slice", "garlic", "dominos pizza"]),
     "dominos": ("pizza", ["pizza", "pizzas", "delivery", "driver", "uniform", "employee",
                           "worker", "staff", "slice", "garlic", "dominos pizza"]),
+    # "DC" is DC Shoes skate wear, AC/DC, Demon Cartel, Washington DC and
+    # Discord before it is DC Comics: a DC report led with 67k favourites on
+    # a y2k DC Shoes tank top. Only listings naming the comics count.
+    "dc": ("DC Comics", ["batman", "superman", "joker", "harley", "wonder woman", "flash",
+                         "aquaman", "justice league", "gotham", "robin", "catwoman",
+                         "supergirl", "krypto", "lex luthor", "darkseid", "green lantern",
+                         "cyborg", "shazam", "nightwing", "batgirl", "penguin", "riddler",
+                         "comics", "comic", "dc universe", "dceu", "super hero", "superhero",
+                         "suicide squad", "peacemaker", "teen titans", "batmobile"]),
     "snickers": ("chocolate", ["bar", "chocolate", "choc", "candy", "peanut", "caramel",
                                "nougat", "mars", "wrapper", "hungry", "satisfies", "sweet", "snack"]),
 }
@@ -657,8 +671,16 @@ def analyse(csv_dir, brand):
                             key=lambda c: -named_creators[c]["items"])
     platform = {"checked": False, "error": "skipped (BRAND_CHECK_NO_PLATFORM)"}
     if os.environ.get("BRAND_CHECK_NO_PLATFORM") != "1":
+        aliases = []
+        try:
+            hit = brand_logo._wikidata_entity(brand)
+            if hit and hit.get("label") and hit["label"].lower() != brand.lower():
+                aliases.append(hit["label"])
+        except Exception:
+            pass
         platform = platform_check.check(brand, verified_names[:8],
-                                        os.path.join(csv_dir, "platform_check.json"))
+                                        os.path.join(csv_dir, "platform_check.json"),
+                                        aliases=aliases)
         if platform.get("error"):
             print(f"  platform check: {platform['error']}")
     partner_of = {}   # creator -> platform brand it issues for

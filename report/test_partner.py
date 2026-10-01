@@ -168,6 +168,18 @@ check("known licensee by id", run.known_licensee("Cartoon Network Games", "55447
 check("known licensee by name needs the badge", run.known_licensee("Cartoon Network Games", "1", False) is None)
 check("known licensee by name with badge", run.known_licensee("cartoon network games", "1", True) == "Cartoon Network")
 
+# 8. "official dc server" is Discord (the DC report, 1 Oct 2026)
+check("official dc server is not a DC activation",
+      not run.sanctioned_activation("DC", "Join the official dc server to be tuned about game news"))
+check("official DC Discord is not a DC activation",
+      not run.sanctioned_activation("DC", "Join our official DC Discord for codes"))
+check("official DC experience still counts",
+      run.sanctioned_activation("DC", "The official DC Super Hero experience on Roblox"))
+check("DC context screen drops DC Shoes wear",
+      not run.matches("dc realistic emo y2k shirt", run.CONTEXT_SCREENS["dc"][1]))
+check("DC context screen keeps Batman",
+      bool(run.matches("DC Batman Cowl", run.CONTEXT_SCREENS["dc"][1])))
+
 passed = sum(1 for _, ok in results if ok)
 print(f"\n{passed}/{len(results)} partner cases correct")
 sys.exit(0 if passed == len(results) else 1)

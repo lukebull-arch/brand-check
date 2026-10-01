@@ -125,7 +125,7 @@ def _since(rows, days):
     return [r for r in rows if r["start"] and r["start"] >= cutoff]
 
 
-def check(brand, creators=(), cache_path=None):
+def check(brand, creators=(), cache_path=None, aliases=()):
     """Return the platform view of the brand and of the verified accounts that
     issue its items. Never raises: the result carries `checked` and `error`."""
     if cache_path and os.path.exists(cache_path):
@@ -145,6 +145,15 @@ def check(brand, creators=(), cache_path=None):
         return _save(res, cache_path)
     try:
         ent = resolve_brand(tok, brand)
+        # A short or common name is ambiguous on the platform ("DC" returns
+        # Events DC, DC Comics, D.C. United, AC/DC). The Wikidata label for the
+        # same brand ("DC Comics") is the tie-break.
+        for alias in aliases or ():
+            if ent:
+                break
+            ent = resolve_brand(tok, alias)
+            if ent:
+                res["resolved_via"] = alias
         res["brand_entity"] = ent
         if ent:
             rows = partnerships(tok, ent["id"])
