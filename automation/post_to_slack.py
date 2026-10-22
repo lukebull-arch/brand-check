@@ -6,7 +6,8 @@ Approve / Reject buttons. The button values carry everything the approval
 handler (n8n) needs to send the email without further lookups.
 
 Env: SLACK_BOT_TOKEN (xoxb-, scopes chat:write + files:write),
-     SLACK_CHANNEL_ID (the channel's ID, e.g. C0XXXXXXX)
+     SLACK_CHANNEL_ID (the channel's ID, e.g. C0XXXXXXX),
+     ANTHROPIC_API_KEY (picks the SDR to copy in; see sdr_route.py)
 """
 import argparse
 import json
@@ -14,6 +15,8 @@ import os
 import sys
 import urllib.parse
 import urllib.request
+
+import sdr_route
 
 TOKEN = os.environ["SLACK_BOT_TOKEN"]
 CHANNEL = os.environ["SLACK_CHANNEL_ID"]
@@ -181,6 +184,20 @@ def review_flags(summary_path, brand):
     return "\n".join(lines)
 
 
+def cc_note(r):
+    """One line for the draft saying who will be copied in, and how sure we are."""
+    if not r["sdr"]:
+        return (f":rotating_light: *No SDR will be copied in:* the sector lookup failed "
+                f"({r['error']}). The email goes without a CC or an introduction. "
+                "Forward it to Rachel or Cody after sending.")
+    s = r["sdr"]
+    line = f":busts_in_silhouette: *{s['full_name']}* ({s['email']}), sector {r['sector']}"
+    if r["fit"] == "closest":
+        return (f"{line}. :warning: *Closest fit, no sector matches exactly:* {r['why']}. "
+                "If that is the wrong SDR, discard and send by hand.")
+    return f"{line}. {r['why']}" if r["why"] else line
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--brand", required=True)
@@ -193,6 +210,14 @@ def main():
     args = ap.parse_args()
 
     draft = open(args.email_draft).read().strip()
+
+    # Every delivery copies in the SDR for the brand's sector, introduced in
+    # the email itself. The approve handler reads `cc` from the button value.
+    route = sdr_route.route(args.brand, args.email)
+    cc = route["sdr"]["email"] if route["sdr"] else ""
+    if route["sdr"]:
+        draft = sdr_route.add_cc_line(draft, route["sdr"]["name"])
+    print(f"SDR route: {json.dumps(route)}")
 
     file_id = upload_pdf(args.pdf, f"Brand check draft: {args.brand}")
 
@@ -208,8 +233,9 @@ def main():
 
     meta = json.dumps({
         "brand": args.brand, "email": args.email,
-        "firstName": args.first_name, "fileId": file_id,
+        "firstName": args.first_name, "fileId": file_id, "cc": cc,
     })
+    cc_text = f", copying in {cc}" if cc else ", with no CC"
     blocks = [
         {"type": "header",
          "text": {"type": "plain_text", "text": f"Draft ready: {args.brand}"}},
@@ -218,6 +244,7 @@ def main():
             {"type": "mrkdwn", "text": f"*Brand*\n{args.brand}"},
         ]},
         {"type": "section", "text": {"type": "mrkdwn", "text": f"*Identity check*\n{domain_check}"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"*CC on approval*\n{cc_note(route)}"}},
         {"type": "section", "text": {"type": "mrkdwn",
             "text": "*Review flags*\n" + review_flags(args.summary, args.brand)}},
         {"type": "section",
@@ -228,7 +255,7 @@ def main():
              "text": {"type": "plain_text", "text": "Approve and send"}, "value": meta,
              "confirm": confirm_dialog(
                  "Send the report?",
-                 f"This emails the {args.brand} PDF to {args.email}.", "Send it")},
+                 f"This emails the {args.brand} PDF to {args.email}{cc_text}.", "Send it")},
             {"type": "button", "style": "danger", "action_id": "brand_check_decline",
              "text": {"type": "plain_text", "text": "Decline: not from brand"}, "value": meta,
              "confirm": confirm_dialog(
