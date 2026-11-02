@@ -530,6 +530,8 @@ def grab_youtube(brand, api_key, out_dir):
 
 
 def write_csv(path, rows):
+    # A two-hour crawl once died at this line because the out dir was missing.
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     if not rows:
         # still write the header-only file so downstream sees the slot existed
         open(path, "w").write("")

@@ -1,4 +1,4 @@
-# Brand opportunity report skill, v6
+# Brand opportunity report skill, v7
 
 A Claude skill for the sales team. Give Claude a brand name and it runs the
 same pipeline as the automated GEEIQ brand checker: pulls the brand's Roblox
@@ -46,6 +46,13 @@ scoped to the platform searched.
 ## Questions
 
 luke.bull@geeiq.com
+
+## v7 (2 November 2026)
+
+- Collector: the output folder is created before the CSV is written (a two-hour crawl once died on a missing directory).
+- Renderer: one-page mode (`BRAND_CHECK_ONE_PAGE=1`) caps creators at three and tags the page `page one`; the hero label strips emoji and live-ops tags from experience names.
+- `verify_print.py` is bundled: run it on every PDF before sending (fonts embedded, QR decodes, no overflow).
+- New section in SKILL.md: sending a brand check by hand, with the SDR CC rule (Rachel or Cody by sector, HubSpot BCC) that the automation applies since 22 October 2026.
 
 ## v6 (30 September 2026)
 

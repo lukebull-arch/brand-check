@@ -3,7 +3,7 @@ name: brand-opportunity-report
 description: Build a GEEIQ brand check for a sales conversation. Runs the same collector, classifier and renderer as the internal brand check pipeline (Roblox marketplace, Roblox experiences, YouTube gaming content), then applies the platform check, the web check and the house writing rules to produce a client-ready two-page PDF. Use whenever someone asks for a brand check, opportunity report, ABM report, prospect report, or what a brand looks like on Roblox, Fortnite or YouTube. Trigger on casual phrasings too: "what does Nike look like on Roblox", "run a brand check on Casio", "build me something for the LVMH pitch".
 ---
 
-# Brand opportunity report (v5, 25 September 2026)
+# Brand opportunity report (v7, 2 November 2026)
 
 This skill ships the live GEEIQ pipeline, not a copy of it. `scripts/run.py`
 collects, classifies and renders exactly as the automated brand checker does,
@@ -104,7 +104,7 @@ KTM (live Driving Empire integration), Aston Martin (ten licensed cars in a
 no longer appears in search). The third one was addressed to the President of
 the studio that commissioned it.
 
-**What the pipeline now does for you (v6).** `run.py` asks the platform
+**What the pipeline now does for you (v7).** `run.py` asks the platform
 itself before writing a word: it resolves the brand, pulls its partnership
 records, and looks up every Roblox-verified account that issues brand-named
 items. A verified issuer the platform (or the licensee list in `run.py`) places
@@ -265,3 +265,55 @@ someone else owns without telling them.
 - Nothing here sees inside an experience: licensed cars, wearables, events
   and sponsorship placements are invisible to every figure.
 - Group memberships overlap and are not players.
+
+## Sending a brand check by hand
+
+The automated checker copies in the SDR who covers the brand's sector on
+every delivery email (since 22 Oct 2026). A report sent by hand, such as a
+bespoke build or a corrected CI draft, follows the same rule, so the lead
+gets the same route to a full walkthrough whichever way the report arrives.
+
+Pick the SDR by the brand's sector:
+
+| SDR | Sectors |
+|---|---|
+| Rachel Ozsanlav-Harris, rachel@geeiq.com | Fashion & Apparel, Retail, Personal Care & Cosmetics, Sports, Financial Services, Public Services / Internet apps |
+| Cody Gray, cody@geeiq.com | Food & Drink, Automotive, Toys & Collectables, Consumer Electronics, Media & Entertainment, Leisure, Travel & Tourism |
+
+When the sector is unclear, run the same classifier the automation uses:
+`python3 automation/sdr_route.py in the brand-check repo "BRAND" --email lead@domain`
+(needs `ANTHROPIC_API_KEY`). A brand that fits no sector (pharma, telecoms,
+energy, tools) gets the closest one. Tell Luke it was a closest fit when you
+hand him the draft.
+
+Every hand-sent `email_draft.txt` then carries:
+
+- A header block: `To:` the lead, `CC:` the SDR, `BCC: 5878363@bcc.hubspot.com`
+  (logs the email in HubSpot), `Attach:` the PDF.
+- This paragraph, on its own, directly above the sign-off, with the SDR's
+  first name. Keep the wording identical to the automated email:
+
+  > For even more detail, I've copied in my colleague Rachel, who can take
+  > you through the entire brands and gaming landscape and what others in
+  > your category are doing.
+
+  If the email already offers a consultation booked by the SDR (the IOC
+  email did), that offer replaces this paragraph. Never introduce the SDR
+  twice.
+
+If someone else owns the contact or the company in HubSpot (an AE such as
+Sam, Harry or Charles), still copy in the sector SDR. Name the owner in the
+note to Luke so he can decide whether they should be copied in as well.
+
+Drafting is not sending. Send only when Luke says so in the current
+conversation, and report the To, CC and BCC lines as sent.
+
+## Example
+
+**User**: what does KFC look like on roblox?
+
+**Do**: run `python3 scripts/grab.py --brand "KFC"`, classify, then report
+along these lines: "No official KFC presence. Players built it instead:
+150 creator-made KFC items from 86 creators, and the top KFC experiences
+have 69m lifetime visits between them, led by Escape KFC Obby at 44m.
+Excluded 60 unrelated search rows. YouTube skipped, no API key set."

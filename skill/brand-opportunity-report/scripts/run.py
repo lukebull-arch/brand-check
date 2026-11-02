@@ -933,7 +933,7 @@ def candidates(a):
         # when exactly one fan game existed.
         top = a.get("top_game") or {}
         if a["games_matching"] == 1 and top.get("name"):
-            visits_label = (f"lifetime visits to {top['name']}, the only "
+            visits_label = (f"lifetime visits to {strip_emoji(top['name'])}, the only "
                             f"{a['brand']} experience we found on Roblox")
         else:
             visits_label = f"lifetime visits across {a['brand']} experiences on Roblox"

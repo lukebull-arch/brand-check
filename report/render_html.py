@@ -328,7 +328,7 @@ def render(payload, out_path):
     if len(top_creators) >= 3:
         rows = "\n".join(
             f'      <div class="row"><span>{_esc(c["name"])}</span>'
-            f'<span>{c["items"]} items</span></div>' for c in top_creators[:(4 if os.environ.get("BRAND_CHECK_ONE_PAGE") == "1" else 6)])
+            f'<span>{c["items"]} items</span></div>' for c in top_creators[:(3 if os.environ.get("BRAND_CHECK_ONE_PAGE") == "1" else 6)])
         creators_section = ('  <p class="sec">Most active creators</p>\n'
                             '  <div class="panel" style="margin-bottom:6mm;">\n'
                             + rows + "\n  </div>\n")
@@ -406,7 +406,7 @@ def render(payload, out_path):
         if second != -1:
             tail = filled.rfind('</body>')
             filled = filled[:second] + filled[tail:]
-        filled = filled.replace("Page 1 of 2", "")
+        filled = filled.replace("Page 1 of 2", "").replace('<div class="page">', '<div class="page one">', 1)
 
     workdir = os.path.dirname(os.path.abspath(out_path)) or "."
     html_path = os.path.join(workdir, "report.html")
